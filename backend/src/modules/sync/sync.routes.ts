@@ -4,8 +4,8 @@ import { query, withTransaction } from '../../db/index.js';
 
 const syncChangeSchema = z.object({
   operationId: z.string(),
-  entity: z.enum(['task', 'daily_plan']),
-  action: z.enum(['INSERT', 'UPDATE', 'DELETE']),
+  entity: z.enum(['task', 'daily_plan', 'plan']),
+  action: z.enum(['INSERT', 'UPDATE', 'DELETE', 'CREATE']),
   id: z.string().uuid(),
   version: z.number().int().optional(),
   updatedAt: z.string(),
@@ -35,11 +35,14 @@ export async function syncRoutes(app: FastifyInstance) {
 
     const { changes } = parseResult.data;
     const committedOperations: string[] = [];
+    const failedOperations: { operationId: string; error: string }[] = [];
 
     await withTransaction(async (client) => {
       for (const change of changes) {
+        let isCommitted = false;
+
         if (change.entity === 'task') {
-          if (change.action === 'INSERT') {
+          if (change.action === 'INSERT' || change.action === 'CREATE') {
             await client.query(
               `INSERT INTO tasks (id, user_id, title, priority, status, created_at, updated_at)
                VALUES ($1, $2, $3, COALESCE($4, 'MEDIUM'), COALESCE($5, 'PENDING'), $6, $7)
@@ -55,6 +58,7 @@ export async function syncRoutes(app: FastifyInstance) {
                 change.updatedAt,
               ]
             );
+            isCommitted = true;
           } else if (change.action === 'UPDATE') {
             await client.query(
               `UPDATE tasks
@@ -75,14 +79,35 @@ export async function syncRoutes(app: FastifyInstance) {
                 user.userId,
               ]
             );
+            isCommitted = true;
           } else if (change.action === 'DELETE') {
             await client.query(
               `UPDATE tasks SET deleted_at = NOW(), updated_at = NOW(), version = version + 1 WHERE id = $1 AND user_id = $2`,
               [change.id, user.userId]
             );
+            isCommitted = true;
+          }
+        } else if (change.entity === 'plan' || change.entity === 'daily_plan') {
+          if (change.action === 'INSERT' || change.action === 'CREATE' || change.action === 'UPDATE') {
+            await client.query(
+              `INSERT INTO daily_plans (id, user_id, plan_date, status, updated_at)
+               VALUES ($1, $2, $3, COALESCE($4, 'DRAFT'), $5)
+               ON CONFLICT (id) DO UPDATE
+               SET status = EXCLUDED.status, updated_at = EXCLUDED.updated_at, version = daily_plans.version + 1`,
+              [change.id, user.userId, change.data.planDate, change.data.status, change.updatedAt]
+            );
+            isCommitted = true;
           }
         }
-        committedOperations.push(change.operationId);
+
+        if (isCommitted) {
+          committedOperations.push(change.operationId);
+        } else {
+          failedOperations.push({
+            operationId: change.operationId,
+            error: `Unhandled entity '${change.entity}' or action '${change.action}'`,
+          });
+        }
       }
     });
 
@@ -90,6 +115,7 @@ export async function syncRoutes(app: FastifyInstance) {
       success: true,
       data: {
         committedOperations,
+        failedOperations,
         conflicts: [],
         serverTime: new Date().toISOString(),
       },

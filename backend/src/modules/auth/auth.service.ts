@@ -4,8 +4,13 @@ import { query, withTransaction } from '../../db/index.js';
 export interface User {
   id: string;
   email: string;
+  preferred_name: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface UserWithPassword extends User {
+  password_hash: string;
 }
 
 export interface UserProfile {
@@ -13,6 +18,9 @@ export interface UserProfile {
   display_name: string | null;
   date_of_birth: string | null;
   timezone: string;
+  typical_wake_time: string | null;
+  typical_sleep_time: string | null;
+  planning_style: string;
   onboarding_status: string;
 }
 
@@ -28,16 +36,15 @@ export class AuthService {
         throw new Error('EMAIL_ALREADY_EXISTS');
       }
 
-      // Insert user
+      // Insert user with password_hash and preferred_name
       const userRes = await client.query<User>(
-        `INSERT INTO users (email, auth_provider)
-         VALUES ($1, 'password')
-         RETURNING id, email, created_at, updated_at`,
-        [email]
+        `INSERT INTO users (email, password_hash, preferred_name, auth_provider)
+         VALUES ($1, $2, $3, 'password')
+         RETURNING id, email, preferred_name, created_at, updated_at`,
+        [email, passwordHash, displayName]
       );
       const user = userRes.rows[0];
 
-      // In a production setup with credentials table, passwordHash would be in auth_credentials.
       // Insert profile
       await client.query(
         `INSERT INTO user_profiles (user_id, display_name, onboarding_status)
@@ -49,14 +56,25 @@ export class AuthService {
         user: {
           id: user.id,
           email: user.email,
-          displayName,
+          displayName: user.preferred_name || displayName,
         },
       };
     });
   }
 
+  static async findByEmailWithPassword(email: string): Promise<UserWithPassword | null> {
+    const res = await query<UserWithPassword>(
+      'SELECT id, email, password_hash, preferred_name, created_at, updated_at FROM users WHERE email = $1',
+      [email]
+    );
+    return res.rows[0] || null;
+  }
+
   static async findByEmail(email: string): Promise<User | null> {
-    const res = await query<User>('SELECT id, email, created_at, updated_at FROM users WHERE email = $1', [email]);
+    const res = await query<User>(
+      'SELECT id, email, preferred_name, created_at, updated_at FROM users WHERE email = $1',
+      [email]
+    );
     return res.rows[0] || null;
   }
 

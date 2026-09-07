@@ -37,19 +37,38 @@ export async function actionsRoutes(app: FastifyInstance) {
       });
     }
 
-    // Execute deterministically based on action_type
+    // Execute deterministically based on action_type (Fail-Closed Architecture)
+    if (action.action_type !== 'RESCHEDULE_TASK') {
+      return reply.status(422).send({
+        success: false,
+        error: {
+          code: 'UNSUPPORTED_ACTION_TYPE',
+          message: `Action type '${action.action_type}' is not supported by this deterministic executor.`,
+        },
+      });
+    }
+
     await withTransaction(async (client) => {
-      if (action.action_type === 'RESCHEDULE_TASK') {
-        const payload = action.payload_json;
-        await client.query(
-          `UPDATE tasks SET due_at = $1, updated_at = NOW(), version = version + 1 WHERE id = $2 AND user_id = $3`,
-          [payload.newDueAt, payload.taskId, user.userId]
-        );
+      const payload = action.payload_json;
+      if (!payload?.taskId || !payload?.newDueAt) {
+        throw new Error('INVALID_PAYLOAD');
       }
+
+      await client.query(
+        `UPDATE tasks SET due_at = $1, updated_at = NOW(), version = version + 1 WHERE id = $2 AND user_id = $3`,
+        [payload.newDueAt, payload.taskId, user.userId]
+      );
 
       await client.query(
         `UPDATE proposed_actions SET status = 'EXECUTED', resolved_at = NOW() WHERE id = $1`,
         [id]
+      );
+
+      // Record audit life event
+      await client.query(
+        `INSERT INTO life_events (user_id, domain, event_type, reference_table, reference_id, payload_json, occurred_at)
+         VALUES ($1, 'GENERAL', 'ACTION_EXECUTED', 'proposed_actions', $2, $3, NOW())`,
+        [user.userId, id, JSON.stringify({ actionType: action.action_type, payload })]
       );
     });
 

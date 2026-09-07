@@ -21,6 +21,8 @@ create extension if not exists "pgcrypto"; -- for gen_random_uuid()
 create table users (
   id uuid primary key default gen_random_uuid(),
   email text unique not null,
+  password_hash text not null,
+  preferred_name text,
   auth_provider text not null default 'password',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -33,6 +35,10 @@ create table user_profiles (
   timezone text not null default 'UTC',
   locale text default 'en-US',
   currency text default 'USD',
+  lifestyle_type text check (lifestyle_type in ('STUDENT', 'PROFESSIONAL', 'FREELANCER', 'OTHER')),
+  typical_wake_time time default '07:00:00',
+  typical_sleep_time time default '23:00:00',
+  planning_style text default 'BALANCED' check (planning_style in ('STRICT', 'BALANCED', 'FLEXIBLE')),
   onboarding_status text not null default 'NOT_STARTED'
     check (onboarding_status in ('NOT_STARTED','IN_PROGRESS','COMPLETE')),
   created_at timestamptz not null default now(),
@@ -271,15 +277,18 @@ create index idx_habit_logs_habit on habit_logs (habit_id, completed_at);
 create table life_events (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references users(id) on delete cascade,
-  event_type text not null, -- TASK_COMPLETED | EXPENSE_ADDED | FOOD_LOGGED | ...
-  reference_table text not null,
-  reference_id uuid not null,
-  occurred_at timestamptz not null,
+  domain text not null default 'GENERAL',
+  event_type text not null, -- TASK_COMPLETED | EXPENSE_ADDED | FOOD_LOGGED | PLAN_LOCKED | ...
+  reference_table text,
+  reference_id uuid,
+  payload_json jsonb,
   metadata_json jsonb,
+  occurred_at timestamptz not null default now(),
   created_at timestamptz not null default now()
 );
-create index idx_life_events_user_time on life_events (user_id, occurred_at);
+create index idx_life_events_user_time on life_events (user_id, occurred_at desc);
 create index idx_life_events_type on life_events (user_id, event_type);
+create index idx_life_events_domain on life_events (user_id, domain);
 
 create table entry_links (
   id uuid primary key default gen_random_uuid(),

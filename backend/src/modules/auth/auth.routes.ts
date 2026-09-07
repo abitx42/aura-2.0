@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import bcrypt from 'bcryptjs';
 import { AuthService } from './auth.service.js';
 
 const signupSchema = z.object({
@@ -70,9 +71,20 @@ export async function authRoutes(app: FastifyInstance) {
       });
     }
 
-    const { email } = parseResult.data;
-    const user = await AuthService.findByEmail(email);
-    if (!user) {
+    const { email, password } = parseResult.data;
+    const user = await AuthService.findByEmailWithPassword(email);
+    if (!user || !user.password_hash) {
+      return reply.status(401).send({
+        success: false,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'Incorrect email or password.',
+        },
+      });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password_hash);
+    if (!isMatch) {
       return reply.status(401).send({
         success: false,
         error: {

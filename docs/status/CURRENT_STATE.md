@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-09-08  
 **Repository Branch:** `main`  
-**Current Milestone:** Milestone 2 Complete — First Vertical Slice: Plan Tomorrow $\to$ Lock Tomorrow 🔒 $\to$ Today Current Focus & Offline Sync
+**Current Milestone:** Milestone 2.5 Complete — Architectural Foundation Repair & Security Hardening (Phase 2A–2D)
 
 ---
 
@@ -11,13 +11,17 @@
 | Phase / Area | Status | Notes |
 | :--- | :--- | :--- |
 | **Canonical Documentation Suite** | ✅ Complete | Canonical documentation, ADRs, and governance authored in `docs/`. |
+| **Foundation Security & Database**| ✅ Complete | Password hash persistence, bcrypt authentication verification, aligned schema DDL (`life_events`, `user_profiles`). |
+| **Architecture & Sync Unification**| ✅ Complete | Full deprecation of Firebase, unified Room $\to$ Fastify sync, full entity payload serialization, action verbs. |
+| **Integrity & Fail-Closed Safety** | ✅ Complete | Plan locking task ownership validation, fail-closed Proposed Actions execution, locked plan focus priority. |
 | **Fastify TypeScript Backend**    | ✅ Complete | Node.js + TypeScript + PostgreSQL modular monolith with 7 modules & tests. |
 | **Android Client Networking**     | ✅ Complete | Retrofit2 + OkHttp + Moshi in `com.example.api.*` with JWT session manager. |
 | **Offline-First Sync Engine**     | ✅ Complete | Room `pending_operations` queue drained to Fastify backend via WorkManager. |
 | **Daily Plans & Day Locking**     | ✅ Complete | Room `daily_plans` & `daily_plan_items` entities, DAOs, and repository methods. |
-| **Deterministic Current Focus**   | ✅ Complete | Invariant 2 engine: Active $\to$ Scheduled time $\to$ Next Critical $\to$ Next Planned. |
+| **Deterministic Current Focus**   | ✅ Complete | Invariant 2 engine: Active $\to$ Locked Plan Sequence $\to$ Scheduled time $\to$ Critical. |
 | **Today Screen (Screen 11)**      | ✅ Complete | Plan Status Banner + Current Focus hero card with focus timer + progress ring. |
 | **Planning Screen (Screen 12-16)**| ✅ Complete | Tabs (`Today`, `Tomorrow`, `Upcoming`) + 4-step Plan Tomorrow workflow + Lock Tomorrow 🔒. |
+| **Automated Verification Suites** | ✅ Complete | Multi-suite integration tests for auth, plans, sync, and actions in `backend/test/`. |
 
 ---
 

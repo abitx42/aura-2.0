@@ -71,9 +71,9 @@ export class TasksService {
     if (res.rows[0]) {
       // Record Life Event
       await query(
-        `INSERT INTO life_events (user_id, domain, event_type, payload_json, occurred_at)
-         VALUES ($1, 'PRODUCTIVITY', 'TASK_COMPLETED', $2, NOW())`,
-        [userId, JSON.stringify({ taskId, title: res.rows[0].title })]
+        `INSERT INTO life_events (user_id, domain, event_type, reference_table, reference_id, payload_json, occurred_at)
+         VALUES ($1, 'PRODUCTIVITY', 'TASK_COMPLETED', 'tasks', $2, $3, NOW())`,
+        [userId, taskId, JSON.stringify({ taskId, title: res.rows[0].title })]
       );
     }
 

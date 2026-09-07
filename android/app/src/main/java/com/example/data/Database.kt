@@ -88,8 +88,10 @@ data class Task(
 data class Subtask(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val taskId: Int,
+    val taskSyncId: String = "",
     val title: String,
-    val isCompleted: Boolean = false
+    val isCompleted: Boolean = false,
+    val syncId: String = java.util.UUID.randomUUID().toString()
 )
 
 // ==========================================
@@ -574,7 +576,7 @@ interface DailyPlanDao {
         DailyPlan::class,
         DailyPlanItem::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

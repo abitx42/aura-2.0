@@ -39,6 +39,27 @@ export class PlansService {
         throw new Error('PLAN_NOT_FOUND');
       }
 
+      if (planRes.rows[0].status === 'LOCKED') {
+        throw new Error('PLAN_ALREADY_LOCKED');
+      }
+
+      // Verify no duplicate tasks in plan
+      const uniqueTaskIds = [...new Set(taskIdsInOrder)];
+      if (uniqueTaskIds.length !== taskIdsInOrder.length) {
+        throw new Error('DUPLICATE_TASKS_IN_PLAN');
+      }
+
+      // Verify all tasks exist and belong to this user
+      if (uniqueTaskIds.length > 0) {
+        const tasksRes = await client.query(
+          `SELECT id FROM tasks WHERE id = ANY($1::uuid[]) AND user_id = $2 AND deleted_at IS NULL`,
+          [uniqueTaskIds, userId]
+        );
+        if (tasksRes.rows.length !== uniqueTaskIds.length) {
+          throw new Error('INVALID_TASK_SELECTION');
+        }
+      }
+
       // Update plan status to LOCKED
       const updatedPlanRes = await client.query(
         `UPDATE daily_plans
@@ -57,17 +78,17 @@ export class PlansService {
       for (let i = 0; i < taskIdsInOrder.length; i++) {
         const taskId = taskIdsInOrder[i];
         await client.query(
-          `INSERT INTO daily_plan_items (daily_plan_id, item_type, reference_id, status)
-           VALUES ($1, 'TASK', $2, 'PLANNED')`,
-          [planId, taskId]
+          `INSERT INTO daily_plan_items (daily_plan_id, item_type, reference_id, sort_order, status)
+           VALUES ($1, 'TASK', $2, $3, 'PLANNED')`,
+          [planId, taskId, i]
         );
       }
 
       // Emit Life Event
       await client.query(
-        `INSERT INTO life_events (user_id, domain, event_type, payload_json, occurred_at)
-         VALUES ($1, 'PLANNING', 'PLAN_LOCKED', $2, NOW())`,
-        [userId, JSON.stringify({ planId, taskCount: taskIdsInOrder.length, date: planRes.rows[0].plan_date })]
+        `INSERT INTO life_events (user_id, domain, event_type, reference_table, reference_id, payload_json, occurred_at)
+         VALUES ($1, 'PLANNING', 'PLAN_LOCKED', 'daily_plans', $2, $3, NOW())`,
+        [userId, planId, JSON.stringify({ planId, taskCount: taskIdsInOrder.length, date: planRes.rows[0].plan_date })]
       );
 
       return {

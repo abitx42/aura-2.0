@@ -41,6 +41,24 @@ export async function plansRoutes(app: FastifyInstance) {
           error: { code: 'NOT_FOUND', message: 'Plan not found' },
         });
       }
+      if (err.message === 'PLAN_ALREADY_LOCKED') {
+        return reply.status(409).send({
+          success: false,
+          error: { code: 'PLAN_ALREADY_LOCKED', message: 'Plan is already locked' },
+        });
+      }
+      if (err.message === 'DUPLICATE_TASKS_IN_PLAN') {
+        return reply.status(422).send({
+          success: false,
+          error: { code: 'DUPLICATE_TASKS_IN_PLAN', message: 'Duplicate tasks cannot be added to a daily plan' },
+        });
+      }
+      if (err.message === 'INVALID_TASK_SELECTION') {
+        return reply.status(403).send({
+          success: false,
+          error: { code: 'INVALID_TASK_SELECTION', message: 'One or more tasks are invalid or belong to another account' },
+        });
+      }
       throw err;
     }
   });

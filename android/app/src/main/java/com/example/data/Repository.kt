@@ -166,17 +166,43 @@ class AppRepository(val db: AppDatabase, val context: Context? = null) {
         taskDao.getTaskById(taskId)
     }
 
+    private fun taskToJson(task: Task): String {
+        return org.json.JSONObject().apply {
+            put("id", task.syncId)
+            put("title", task.title)
+            put("description", task.description)
+            put("priority", task.priority.uppercase())
+            put("status", if (task.isCompleted) "COMPLETED" else "PENDING")
+            put("category", task.category)
+            put("date", task.date)
+            put("time", task.time)
+            put("createdAt", task.createdTimestamp)
+        }.toString()
+    }
+
+    private fun planToJson(plan: DailyPlan): String {
+        return org.json.JSONObject().apply {
+            put("id", plan.syncId)
+            put("planDate", plan.planDate)
+            put("status", plan.status)
+            put("lockedAt", plan.lockedAt)
+            put("lockReason", plan.lockReason)
+            put("createdAt", plan.createdAt)
+        }.toString()
+    }
+
     suspend fun createTask(task: Task, subtaskTitles: List<String>) = withContext(Dispatchers.IO) {
         val id = taskDao.insertTask(task).toInt()
         for (subTitle in subtaskTitles) {
             if (subTitle.isNotBlank()) {
-                taskDao.insertSubtask(Subtask(taskId = id, title = subTitle))
+                taskDao.insertSubtask(Subtask(taskId = id, taskSyncId = task.syncId, title = subTitle))
             }
         }
         pendingDao.insert(PendingOperation(
             entityType = "TASK",
-            operationType = "CREATE",
-            entitySyncId = task.syncId
+            operationType = "INSERT",
+            entitySyncId = task.syncId,
+            payload = taskToJson(task)
         ))
         triggerSync()
     }
@@ -186,7 +212,8 @@ class AppRepository(val db: AppDatabase, val context: Context? = null) {
         pendingDao.insert(PendingOperation(
             entityType = "TASK",
             operationType = "UPDATE",
-            entitySyncId = task.syncId
+            entitySyncId = task.syncId,
+            payload = taskToJson(task)
         ))
         triggerSync()
     }
@@ -223,9 +250,10 @@ class AppRepository(val db: AppDatabase, val context: Context? = null) {
             dailyPlanDao.insertPlanItems(items)
         }
         pendingDao.insert(PendingOperation(
-            entityType = "DAILY_PLAN",
-            operationType = if (existing != null) "UPDATE" else "CREATE",
-            entitySyncId = planToSave.syncId
+            entityType = "PLAN",
+            operationType = if (existing != null) "UPDATE" else "INSERT",
+            entitySyncId = planToSave.syncId,
+            payload = planToJson(planToSave)
         ))
         triggerSync()
     }
@@ -248,9 +276,10 @@ class AppRepository(val db: AppDatabase, val context: Context? = null) {
             dailyPlanDao.insertPlanItems(orderedItems)
         }
         pendingDao.insert(PendingOperation(
-            entityType = "DAILY_PLAN",
-            operationType = "LOCK",
-            entitySyncId = planToLock.syncId
+            entityType = "PLAN",
+            operationType = "UPDATE",
+            entitySyncId = planToLock.syncId,
+            payload = planToJson(planToLock)
         ))
         triggerSync()
     }

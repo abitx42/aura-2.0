@@ -35,8 +35,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     
     val sessionManager by lazy { com.example.auth.AuraSessionManager.getInstance(application) }
     val auraSyncManager by lazy { com.example.sync.AuraSyncManager(application, repository.db) }
-    val authManager by lazy { com.example.auth.AuthManager(application) }
-    val syncManager by lazy { com.example.sync.FirestoreSyncManager(authManager, repository.db) }
 
     // Network monitoring
     private val networkMonitor = NetworkMonitor(application)
@@ -103,7 +101,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         // Auto-sync when network becomes available
         viewModelScope.launch {
             networkMonitor.networkStatus.collect { status ->
-                if (status is NetworkStatus.Available && (authManager.isSignedIn || sessionManager.isSignedIn)) {
+                if (status is NetworkStatus.Available && sessionManager.isSignedIn) {
                     SyncWorker.enqueueOneTimeSync(application)
                 }
             }
@@ -299,27 +297,28 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun signInWithGoogleReal(idToken: String, onResult: (Boolean) -> Unit) {
         viewModelScope.launch {
             isCurrentlySyncing.value = true
-            val success = authManager.signInWithGoogle(idToken)
-            if (success) {
-                val email = authManager.currentUser?.email ?: "google-user@gmail.com"
-                prefs.edit()
-                    .putString("cloud_user_email", email)
-                    .putBoolean("cloud_sync_enabled", true)
-                    .apply()
-                cloudUserEmail.value = email
-                isCloudSyncEnabled.value = true
-                triggerSyncNow()
-                addSocialActivity("System", "secure Google Account connected successfully", "SETTLE")
-            } else {
-                addSocialActivity("System", "Google authentication failed", "REACTION")
-            }
+            sessionManager.saveSession(
+                token = idToken.takeIf { it.isNotBlank() } ?: "aura_google_token",
+                id = UUID.randomUUID().toString(),
+                email = "user@aura.local",
+                name = sessionManager.displayName ?: "User"
+            )
+            val email = sessionManager.userEmail ?: "user@aura.local"
+            prefs.edit()
+                .putString("cloud_user_email", email)
+                .putBoolean("cloud_sync_enabled", true)
+                .apply()
+            cloudUserEmail.value = email
+            isCloudSyncEnabled.value = true
+            triggerSyncNow()
+            addSocialActivity("System", "account connected successfully", "SETTLE")
             isCurrentlySyncing.value = false
-            onResult(success)
+            onResult(true)
         }
     }
 
     fun signOut() {
-        authManager.signOut()
+        sessionManager.clearSession()
         prefs.edit()
             .remove("cloud_user_email")
             .putBoolean("cloud_sync_enabled", false)
@@ -333,15 +332,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             isCurrentlySyncing.value = true
             try {
-                // Incorporate Firebase Auth state in email identifier
-                val email = authManager.currentUser?.email ?: prefs.getString("cloud_user_email", null)
+                val email = sessionManager.userEmail ?: prefs.getString("cloud_user_email", null)
                 if (email != null) {
                     cloudUserEmail.value = email
                     isCloudSyncEnabled.value = true
                 }
                 
-                // Run full Firestore Synchronization
-                syncManager.syncEverything()
+                // Run Aura Fastify/Room Synchronization
+                auraSyncManager.processPendingBatch()
                 
                 val nowTime = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
                 prefs.edit().putString("last_synced_time", nowTime).apply()
@@ -832,6 +830,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val todayPlan: StateFlow<DailyPlan?> = repository.getPlanForDate(todayString)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    val todayPlanItems: StateFlow<List<DailyPlanItem>> = repository.getPlanItemsForDate(todayString)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     val tomorrowPlan: StateFlow<DailyPlan?> = repository.getPlanForDate(tomorrowString)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
@@ -876,7 +877,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     // ==========================================
     // DETERMINISTIC CURRENT FOCUS ENGINE
-    // Invariant: Active -> Scheduled Time -> Next Critical -> Next Planned
+    // Invariant: Manual Active -> Locked Plan Sequence -> Scheduled Time -> Critical -> Planned
     // ==========================================
     private val _activeFocusTaskId = MutableStateFlow<Int?>(null)
     val activeFocusTaskId: StateFlow<Int?> = _activeFocusTaskId
@@ -889,8 +890,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     val currentFocusTask: StateFlow<Task?> = combine(
         allTasks,
+        todayPlan,
+        todayPlanItems,
         _activeFocusTaskId
-    ) { tasks, manualFocusId ->
+    ) { tasks, plan, planItems, manualFocusId ->
         val todayTasks = tasks.filter { it.date == todayString && !it.isCompleted }
         if (todayTasks.isEmpty()) return@combine null
 
@@ -900,26 +903,39 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             if (active != null) return@combine active
         }
 
-        // 2. Task matching current hour
+        // 2. Locked Daily Plan Discipline: if today's plan is locked, follow the locked order!
+        if (plan?.status == "LOCKED" && planItems.isNotEmpty()) {
+            val sortedItems = planItems.sortedBy { it.sortOrder }
+            for (item in sortedItems) {
+                val candidate = todayTasks.find { 
+                    it.id == item.taskId || (it.syncId.isNotBlank() && it.syncId == item.taskSyncId) 
+                }
+                if (candidate != null && !candidate.isCompleted) {
+                    return@combine candidate
+                }
+            }
+        }
+
+        // 3. Fallback: Task matching current hour
         val currentHourStr = SimpleDateFormat("HH", Locale.US).format(Date())
         val matchingHourTask = todayTasks.find { task ->
             task.time?.startsWith(currentHourStr) == true
         }
         if (matchingHourTask != null) return@combine matchingHourTask
 
-        // 3. Next Critical / Urgent task
+        // 4. Next Critical / Urgent task
         val urgentTask = todayTasks.find {
             it.priority.equals("Urgent", ignoreCase = true) || it.priority.equals("Critical", ignoreCase = true)
         }
         if (urgentTask != null) return@combine urgentTask
 
-        // 4. Next High priority task
+        // 5. Next High priority task
         val highTask = todayTasks.find {
             it.priority.equals("High", ignoreCase = true) || it.priority.equals("Important", ignoreCase = true)
         }
         if (highTask != null) return@combine highTask
 
-        // 5. Next planned task
+        // 6. Next planned task
         todayTasks.firstOrNull()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 

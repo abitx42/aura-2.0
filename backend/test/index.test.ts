@@ -1,4 +1,8 @@
 import { buildApp } from '../src/server.js';
+import { runAuthTests } from './auth.test.js';
+import { runPlansTests } from './plans.test.js';
+import { runSyncTests } from './sync.test.js';
+import { runActionsTests } from './actions.test.js';
 
 async function runTests() {
   console.log('🧪 Running Aura 2.0 Backend Tests...');
@@ -53,8 +57,15 @@ async function runTests() {
   }
   console.log('✅ Test 3 Passed: Zod schema rejects malformed signup request');
 
-  console.log('🎉 All backend tests passed successfully!');
   await app.close();
+
+  // Phase 2D Test Suites
+  await runAuthTests();
+  await runPlansTests();
+  await runSyncTests();
+  await runActionsTests();
+
+  console.log('🎉 All backend verification test suites passed successfully!');
   process.exit(0);
 }
 
