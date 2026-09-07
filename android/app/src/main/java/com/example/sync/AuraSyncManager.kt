@@ -47,7 +47,7 @@ class AuraSyncManager(
         val batchMap = mutableMapOf<String, PendingOperation>()
 
         for (op in batch) {
-            val opId = op.id.toString()
+            val opId = op.operationSyncId
             batchMap[opId] = op
 
             val dataMap = try {

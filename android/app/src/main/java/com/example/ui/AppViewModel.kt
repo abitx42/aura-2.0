@@ -864,6 +864,29 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun saveTomorrowDraftPlan(orderedTasks: List<Task>) {
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            val existing = repository.getPlanForDate(tomorrowString).firstOrNull()
+            val draftPlan = if (existing != null) {
+                existing.copy(updatedAt = now)
+            } else {
+                DailyPlan(planDate = tomorrowString, status = "DRAFT", createdAt = now, updatedAt = now)
+            }
+            val planItems = orderedTasks.mapIndexed { index, task ->
+                DailyPlanItem(
+                    planDate = tomorrowString,
+                    taskId = task.id,
+                    taskSyncId = task.syncId,
+                    sortOrder = index,
+                    scheduledStart = task.time,
+                    durationMinutes = 30
+                )
+            }
+            repository.saveDailyPlan(draftPlan, planItems)
+        }
+    }
+
     fun unlockOrAdaptTomorrowPlan(reason: String? = null) {
         viewModelScope.launch {
             val existing = repository.getPlanForDate(tomorrowString).firstOrNull()

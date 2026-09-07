@@ -88,3 +88,40 @@ User Action ──▶ Local Room Database (Immediate Write)
 - ❌ **No business logic in Composables**: UI renders state and dispatches events only.
 - ❌ **No generic polymorphic database tables**: Use typed, dedicated domain tables for tasks, food, health, and finances.
 - ❌ **No fake AI chat interfaces**: Conversations with Aura must yield actionable cards, not endless chat transcripts.
+
+---
+
+## Rule 8: No Intelligence Without Data
+
+```text
+Data Quality Check
+        ↓
+Enough history? (>= 14 days)
+        ↓
+Enough samples?
+        ↓
+Confidence high enough?
+        ↓
+Generate insight (Otherwise: SILENCE)
+```
+
+- **Never speculate or fabricate insights**: Aura will never generate fake patterns or early behavioral claims (e.g. *"You seem less productive on Mondays"*) when the user has only used the app for a few days.
+- **Strict Data Quality Gates**:
+  - Productivity & focus insights: Minimum 14 consecutive days of task execution.
+  - Sleep & routine insights: Minimum 14 days of sleep logs.
+  - Cross-domain correlations (e.g. food/sleep $\to$ productivity): Minimum 21 days with concurrent logs.
+- If data quality thresholds are not met, Aura strictly does not generate insights. Silence is infinitely superior to hallucinated patterns.
+
+---
+
+## Rule 9: Offline Sync Invariants (Idempotency, Tombstones, Server Authority)
+
+1. **Operation Idempotency via Client UUIDs**:
+   - Every pending write operation must carry a client-generated UUID `operation_id`.
+   - The backend tracks processed operations in `processed_sync_operations`. If an operation is retransmitted due to network disruption before client ACK, the server skips duplicate mutation and returns instant acknowledgment.
+2. **Soft Deletes & Tombstone Integrity**:
+   - Deleted entities receive `deleted_at = NOW()`.
+   - Incoming mutations from offline devices for soft-deleted entities must never resurrect them unless an explicit un-delete action is requested.
+3. **Server Timestamp Authority**:
+   - Cloud ordering and conflict resolution rely on authoritative server timestamps (`NOW()`), never solely on client device clocks.
+

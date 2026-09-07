@@ -97,3 +97,12 @@ export interface ProposedActionRecord {
   created_at: string;
   resolved_at: string | null;
 }
+
+export interface ProcessedSyncOperationRecord {
+  operation_id: string;
+  user_id: string;
+  entity: string;
+  action: string;
+  processed_at: string;
+}
+

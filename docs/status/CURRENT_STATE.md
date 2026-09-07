@@ -11,19 +11,28 @@
 
 ```text
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Documentation:        🟢 Strong (Canonical docs & ADRs in docs/)
-Product Vision:       🟢 Defined (PRD, vertical slices)
-Architecture:         🟢 Defined (PostgreSQL + Fastify + Room)
-Foundation Repair:    🟢 Implemented (Phases 2A - 2D complete)
-Backend Tests:        🟢 Passing (100% test pass on auth/plans/sync/actions)
-Backend Build:        🟢 Passing (0 tsc errors)
-Database Migration:   🟢 Incremental Runner (001, 002)
-Android Build:        🟡 Wrapper & scripts verified (Local SDK required for full APK assembly)
-Real Offline E2E:     🟡 Offline-first queue verified; ready for staging device test
+📚 Documentation:        🟢 95% (Canonical docs, ADRs, RULES.md)
+🏗️ Architecture:         🟢 90% (Modular Fastify + PostgreSQL + Room)
+🗄️ Database:             🟢 90% (Incremental migrations 001-003)
+🔄 Offline Sync:         🟢 85% (Idempotent queue + tombstone preservation)
+🔐 Security Foundation:  🟢 85% (Bcrypt, JWT fail-closed, auth guards)
+🤖 AI Architecture:      🟢 90% ("No intelligence without data", proposed actions)
 
-NEXT: Milestone 3 — Core Daily Loop
+📱 Android Runtime:      🟡 Toolchain configuration verified; full compilation pending Android SDK installation
+🔄 Real Device Sync:     🟡 Pending E2E device validation
+
+🎯 Core Daily Loop:      🔵 ACTIVE — Milestone 3A: Plan Tomorrow
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
+
+### Milestone 3 Vertical Slice Build Order
+1. **Milestone 3A**: Plan Tomorrow ◄── *(Active)*
+2. **Milestone 3B**: Lock Tomorrow 🔒
+3. **Milestone 3C**: Today + Current Focus (Deterministic logic)
+4. **Milestone 3D**: Task Execution
+5. **Milestone 3E**: Night Review 🌙
+6. **Milestone 3F**: Real Offline E2E Test
+
 
 ---
 

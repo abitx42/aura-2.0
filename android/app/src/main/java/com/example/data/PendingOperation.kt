@@ -10,8 +10,9 @@ import kotlinx.coroutines.flow.Flow
 @Entity(tableName = "pending_operations")
 data class PendingOperation(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
-    val entityType: String,       // "NOTE", "TASK", "JOURNAL", "HABIT", "TRANSACTION", "DEBT"
-    val operationType: String,    // "CREATE", "UPDATE", "DELETE"
+    val operationSyncId: String = java.util.UUID.randomUUID().toString(),
+    val entityType: String,       // "NOTE", "TASK", "JOURNAL", "HABIT", "TRANSACTION", "DEBT", "PLAN"
+    val operationType: String,    // "CREATE", "UPDATE", "DELETE", "INSERT"
     val entitySyncId: String,     // The syncId of the entity being operated on
     val payload: String = "",     // JSON serialized payload for CREATE/UPDATE
     val createdAt: Long = System.currentTimeMillis(),

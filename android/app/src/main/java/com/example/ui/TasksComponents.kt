@@ -1646,34 +1646,70 @@ fun PlanTomorrowScreen(
             }
         }
 
-        // 6. PRIMARY LOCK CTA
+        // 6. PRIMARY ACTIONS (SAVE DRAFT & LOCK TOMORROW)
         item {
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = {
-                    AuraHaptics.triggerSelection(view)
-                    showLockConfirmDialog = true
-                },
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isTomorrowLocked) AuraTheme.colors.positiveGreen else AuraTheme.colors.accentBrand
-                ),
-                shape = RoundedCornerShape(14.dp)
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Lock,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = if (isTomorrowLocked) "LOCK UPDATED COMMITMENT 🔒" else "LOCK TOMORROW 🔒",
-                    color = Color.White,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 13.sp,
-                    letterSpacing = 1.sp
-                )
+                if (!isTomorrowLocked) {
+                    OutlinedButton(
+                        onClick = {
+                            AuraHaptics.triggerSelection(view)
+                            viewModel.saveTomorrowDraftPlan(tomorrowTasks)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, AuraTheme.colors.cardBorder),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = AuraTheme.colors.textPrimary
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Save,
+                            contentDescription = null,
+                            tint = AuraTheme.colors.textPrimary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "SAVE DRAFT PLAN",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = AuraTheme.colors.textPrimary,
+                            letterSpacing = 1.sp
+                        )
+                    }
+                }
+
+                Button(
+                    onClick = {
+                        AuraHaptics.triggerSelection(view)
+                        showLockConfirmDialog = true
+                    },
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isTomorrowLocked) AuraTheme.colors.positiveGreen else AuraTheme.colors.accentBrand
+                    ),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (isTomorrowLocked) "LOCK UPDATED COMMITMENT 🔒" else "LOCK TOMORROW 🔒",
+                        color = Color.White,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 13.sp,
+                        letterSpacing = 1.sp
+                    )
+                }
             }
         }
     }
