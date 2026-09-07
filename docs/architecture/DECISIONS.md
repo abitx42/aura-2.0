@@ -236,3 +236,30 @@
   - Zero data loss under intermittent networks, cellular drops, or process kills.
   - Prevents deleted tasks from mysteriously reappearing.
   - Establishes automated regression verification covering all 5 scenarios in `backend/test/offline_e2e.test.ts`.
+
+---
+
+### ADR-015: Founder Testing Infrastructure, In-App Diagnostics & Resilient Error Boundaries
+- **Status:** Accepted (Phase 2)
+- **Context:**
+  - In Phase 2, Aura 2.0 enters dogfooding / founder daily driver testing for 7–14 consecutive days.
+  - In real mobile testing, founders often test away from developer workstations without an active `adb logcat` session or debugger attached.
+  - If a crash occurs or sync gets stuck, diagnosing the defect after the fact requires persistent forensics.
+  - Founders need to test end-of-day flows (like Night Review) without waiting until 10 PM every evening, and test offline queueing without forcing their entire phone into Airplane Mode.
+- **Decision:**
+  1. **In-App Founder Diagnostics (`DebugScreen.kt`)**:
+     - Provide an in-app diagnostic console accessible via Settings or 5-tap avatar gesture.
+     - **Sync Queue Inspector**: Live view of pending operations in Room, payload inspecting, manual drain trigger, and emergency queue purge.
+     - **Database Inspector**: Live table row counts across tasks, plans, items, life events, and operations.
+     - **Daily Loop Testing Shortcuts**: Time-travel shortcuts to trigger Night Review immediately, activate today's plan, reset today's plan, and populate a realistic sample day (3 tasks, 1 meeting, 1 habit).
+     - **Simulated Offline Mode**: In-app toggle that intercepts network calls at the client layer to simulate complete network isolation while keeping the device connected for messaging/calls.
+     - **In-App Founder Friction Recorder**: Direct input field in the debug console to log friction and UX issues directly to disk and life events.
+  2. **File-Backed Crash Forensics (`AuraCrashHandler.kt`)**:
+     - Install an uncaught exception handler in `AuraApplication` that writes crash traces to `/data/data/com.example/files/aura_crash_log.txt` and maintains an in-memory ring buffer of recent errors.
+  3. **Compose UI Error Boundary (`AuraErrorBoundary.kt`)**:
+     - Wrap root Compose tree with error boundaries catching rendering crashes gracefully, preventing app exit and allowing recovery.
+  4. **Build Environment Security**:
+     - Restrict all diagnostic endpoints, debug UI buttons, and queue purges to `BuildConfig.DEBUG` builds to prevent diagnostic exposure in production releases.
+- **Consequences:**
+  - Fast, observable daily testing cycle for founder Aadi without tethered computer requirements.
+  - Complete forensics trail for any edge-case crash or sync anomaly during 14-day evaluation.

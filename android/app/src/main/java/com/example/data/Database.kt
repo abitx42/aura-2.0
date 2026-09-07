@@ -598,6 +598,9 @@ interface DailyPlanDao {
     @Query("DELETE FROM daily_plan_items WHERE planDate = :date")
     suspend fun deletePlanItemsForDate(date: String)
 
+    @Query("DELETE FROM daily_plans WHERE planDate = :date")
+    suspend fun deletePlanForDate(date: String)
+
     @Query("UPDATE daily_plan_items SET executionState = :state, actualStartTimestamp = :actualStart, actualDurationSeconds = :durationSec WHERE id = :itemId")
     suspend fun updateItemExecution(itemId: String, state: String, actualStart: Long?, durationSec: Int)
 

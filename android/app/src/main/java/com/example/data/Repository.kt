@@ -24,6 +24,16 @@ class AppRepository(val db: AppDatabase, val context: Context? = null) {
     private val dailyPlanDao = db.dailyPlanDao()
 
     val pendingOperationsCount: Flow<Int> = pendingDao.getPendingCount()
+    val allPendingOperations: Flow<List<PendingOperation>> = pendingDao.getAllPending()
+
+    suspend fun clearAllPendingOperations() = withContext(Dispatchers.IO) {
+        pendingDao.clearAll()
+    }
+
+    suspend fun resetPlanForDate(date: String) = withContext(Dispatchers.IO) {
+        dailyPlanDao.deletePlanItemsForDate(date)
+        dailyPlanDao.deletePlanForDate(date)
+    }
 
     private fun triggerSync() {
         context?.let { ctx ->
@@ -199,7 +209,7 @@ class AppRepository(val db: AppDatabase, val context: Context? = null) {
         }.toString()
     }
 
-    suspend fun createTask(task: Task, subtaskTitles: List<String>) = withContext(Dispatchers.IO) {
+    suspend fun createTask(task: Task, subtaskTitles: List<String>): Int = withContext(Dispatchers.IO) {
         val id = taskDao.insertTask(task).toInt()
         for (subTitle in subtaskTitles) {
             if (subTitle.isNotBlank()) {
@@ -213,6 +223,7 @@ class AppRepository(val db: AppDatabase, val context: Context? = null) {
             payload = taskToJson(task)
         ))
         triggerSync()
+        id
     }
 
     suspend fun updateTask(task: Task) = withContext(Dispatchers.IO) {

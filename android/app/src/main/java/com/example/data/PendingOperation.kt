@@ -42,4 +42,7 @@ interface PendingOperationDao {
 
     @Query("SELECT * FROM pending_operations LIMIT :limit")
     suspend fun getBatch(limit: Int = 20): List<PendingOperation>
+
+    @Query("DELETE FROM pending_operations")
+    suspend fun clearAll()
 }

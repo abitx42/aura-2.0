@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -78,7 +79,8 @@ fun MainAppContainer(
         viewModel.checkSecurityLock()
     }
 
-    Box(modifier = modifier.fillMaxSize().background(AuraTheme.colors.screenBackground)) {
+    AuraErrorBoundary(modifier = modifier) {
+        Box(modifier = Modifier.fillMaxSize().background(AuraTheme.colors.screenBackground)) {
         if (!isAppUnlocked) {
             // High-contrast Glassmorphic security lock screen
             SecurityPinKeypadGate(viewModel = viewModel)
@@ -652,6 +654,12 @@ fun MainAppContainer(
                                 }
                                 Section.SecuritySettings -> {
                                     AppSecuritySettingsScreen(viewModel = viewModel)
+                                }
+                                Section.Debug -> {
+                                    DebugScreen(
+                                        viewModel = viewModel,
+                                        onBack = { viewModel.navigateTo(Section.SecuritySettings) }
+                                    )
                                 }
                                 Section.Habits -> {
                                     HabitsTabScreen(viewModel = viewModel)
@@ -1384,6 +1392,7 @@ fun MainAppContainer(
             }
         }
     }
+}
 }
 
 fun getNoteCategoryColor(category: String): Color {
@@ -3899,6 +3908,42 @@ fun AppSecuritySettingsScreen(
             }
             Spacer(modifier = Modifier.width(6.dp))
             Text("SETTINGS & SYSTEM CONFIG", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = AuraTheme.colors.textPrimary)
+        }
+
+        // ======================================================================
+        // PHASE 2 FOUNDER DIAGNOSTICS & DEBUG TOOLS
+        // ======================================================================
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { viewModel.navigateTo(Section.Debug) }
+                .border(1.dp, AuraTheme.colors.accentBrand.copy(alpha = 0.6f), RoundedCornerShape(16.dp)),
+            colors = CardDefaults.cardColors(containerColor = AuraTheme.colors.accentBrand.copy(alpha = 0.1f)),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "FOUNDER DIAGNOSTICS & DEBUG 🛠️",
+                        color = AuraTheme.colors.accentBrand,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Text(
+                        text = "Sync queue inspector, loop shortcuts, offline mode, live logs",
+                        color = AuraTheme.colors.textSecondary,
+                        fontSize = 11.sp
+                    )
+                }
+                Text("OPEN ➔", color = AuraTheme.colors.accentBrand, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
         }
 
         // ======================================================================

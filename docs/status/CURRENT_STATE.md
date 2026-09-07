@@ -2,8 +2,9 @@
 
 **Last Updated:** 2026-09-08  
 **Repository Branch:** `main`  
-**Current Milestone:** Milestone 2.5 Complete — Architectural Foundation Repair & Security Hardening  
-**Canonical Repair Record:** [`docs/status/MILESTONE_2_5_FOUNDATION_REPAIR.md`](MILESTONE_2_5_FOUNDATION_REPAIR.md)
+**Current Phase:** **PHASE 2 ACTIVE** — Founder Testing & Stabilization (7–14 Days)  
+**Canonical Roadmap:** [`docs/product/DEVELOPMENT_PHASES.md`](../product/DEVELOPMENT_PHASES.md)  
+**Founder Feedback Log:** [`docs/status/FOUNDER_FEEDBACK_LOG.md`](FOUNDER_FEEDBACK_LOG.md)  
 
 ---
 
@@ -11,9 +12,9 @@
 
 ```text
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📚 Documentation:          🟢 98% (Canonical docs, ADR-001 - ADR-014, RULES.md)
+📚 Documentation:          🟢 99% (Canonical docs, ADR-001 - ADR-015, DEVELOPMENT_PHASES)
 🏗️ Architecture:           🟢 98% (Modular Fastify + PostgreSQL + Room)
-🗄️ Database:               🟢 96% (Incremental migrations 001-005)
+🗄️ Database:               🟢 96% (Incremental migrations 001-006)
 🔄 Sync Architecture:      🟢 98% (Atomic idempotency + tombstone preservation + offline queue)
 🔐 Security Foundation:    🟢 88% (Bcrypt, JWT fail-closed, auth guards)
 🤖 AI Architecture:        🟢 90% ("No intelligence without data", proposed actions)
@@ -23,21 +24,25 @@
 📱 Android Compilation:    🟢 100% compiled (Kotlin + Java 0 errors)
 📱 Android Unit Tests:      🟢 100% passing (41 tests, 0 failures)
 📱 Android Artifact:       🟢 Signed app-debug.apk generated (20 MB)
-🔄 Real Device Sync:       🟡 Ready for Founder Testing Mode on physical device
+🔄 Real Device Testing:    🟢 Founder Testing Mode Active (Day 1 of 14)
 
 🎯 Core Daily Loop:        🟢 COMPLETE — Milestones 3A through 3F fully verified
+🛠️ In-App Diagnostics:     🟢 Active (Debug Screen + Crash Forensics + Error Boundary)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-### Milestone 3 Vertical Slice Build Order
-1. **Milestone 3A**: Plan Tomorrow ✅
-2. **Milestone 3B**: Lock Tomorrow 🔒 ✅
-3. **Milestone 3C**: Today + Current Focus (Deterministic logic) ✅
-4. **Milestone 3D**: Task Execution ✅
-5. **Milestone 3E**: Night Review 🌙 ✅
-6. **Milestone 3F**: Real Offline E2E Test & Android Toolchain Setup ✅
-
-
+### Aura 2.0 Development Phases
+1. **Phase 1: Foundation & Core Daily Loop** (Milestones 1–3F) ✅ Complete
+2. **Phase 2: Founder Testing & Stabilization (7–14 Days)** ◄── **ACTIVE**
+3. **Phase 3: Universal Frictionless Capture** ⏳ (Queued behind Phase 2 gate)
+4. **Phase 4: Context Engine V1** ⏳
+5. **Phase 5: Aura Brain & Persistent Memory** ⏳
+6. **Phase 6: Adaptive Planning & Accountability** ⏳
+7. **Phase 7: Life Domains (Nutrition, Health, Finance, Mood)** ⏳
+8. **Phase 8: Phone Awareness & Screen Intelligence** ⏳
+9. **Phase 9: Consistency System & Aura Score** ⏳
+10. **Phase 10: Community & Leaderboards (Opt-in)** ⏳
+11. **Phase 11: Premium Aura Brain & Monetization** ⏳
 
 ---
 

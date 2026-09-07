@@ -11,6 +11,7 @@ import com.example.audio.AudioController
 import com.example.audio.PlaybackState
 import com.example.data.*
 import com.example.sync.SyncWorker
+import com.example.util.AuraCrashHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -45,6 +46,67 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     // Pending sync operations count (for UI badge)
     val pendingOpsCount: StateFlow<Int> = repository.pendingOperationsCount
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val allPendingOperations: StateFlow<List<PendingOperation>> = repository.allPendingOperations
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _isSimulatedOffline = MutableStateFlow(false)
+    val isSimulatedOffline: StateFlow<Boolean> = _isSimulatedOffline
+
+    fun toggleSimulatedOffline() {
+        _isSimulatedOffline.value = !_isSimulatedOffline.value
+        AuraCrashHandler.logEvent("DEBUG", "Simulated offline toggled: ${_isSimulatedOffline.value}")
+    }
+
+    fun clearPendingOperationsQueue() {
+        viewModelScope.launch {
+            repository.clearAllPendingOperations()
+            AuraCrashHandler.logEvent("DEBUG", "Pending operations queue purged by founder")
+        }
+    }
+
+    fun resetTodayPlan() {
+        viewModelScope.launch {
+            val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+            repository.resetPlanForDate(todayStr)
+            AuraCrashHandler.logEvent("DEBUG", "Today's plan reset for $todayStr")
+        }
+    }
+
+    fun populateFounderSampleDay() {
+        viewModelScope.launch {
+            val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+            val sampleTasks = listOf(
+                Task(title = "Draft Architecture Spec", priority = "High", date = todayStr, energy = "High Energy"),
+                Task(title = "Review Fastify Endpoints", priority = "Medium", date = todayStr, energy = "Medium Energy"),
+                Task(title = "30-min Evening Walk", priority = "Low", date = todayStr, energy = "Low Energy")
+            )
+            val createdTasks = mutableListOf<Task>()
+            for (t in sampleTasks) {
+                val id = repository.createTask(t, emptyList())
+                createdTasks.add(t.copy(id = id))
+            }
+            // Create and lock plan
+            saveTomorrowDraftPlan(createdTasks)
+            lockTomorrowPlan(orderedTasks = createdTasks, reason = "Founder testing sample day")
+            startMyDay()
+            AuraCrashHandler.logEvent("DEBUG", "Populated founder sample day with 3 tasks and active plan")
+        }
+    }
+
+    fun recordFounderFrictionNote(note: String) {
+        if (note.isBlank()) return
+        viewModelScope.launch {
+            AuraCrashHandler.logEvent("FOUNDER_FEEDBACK", note)
+            try {
+                val file = java.io.File(getApplication<android.app.Application>().filesDir, "founder_notes.txt")
+                val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
+                file.appendText("[$timestamp] $note\n\n")
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
+    }
 
     private val prefs = application.getSharedPreferences("aura_prefs", android.content.Context.MODE_PRIVATE)
 
@@ -2245,7 +2307,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
 // Support Structs
 enum class Section {
-    Dashboard, Notes, RichNoteEditor, DrawingWorkspace, Tasks, Habits, Day, SecuritySettings, Money
+    Dashboard, Notes, RichNoteEditor, DrawingWorkspace, Tasks, Habits, Day, SecuritySettings, Money, Debug
 }
 
 enum class SortOrder {
