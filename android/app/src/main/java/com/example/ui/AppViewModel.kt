@@ -33,6 +33,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = AppRepository.getInstance(application)
     val audioController = AudioController(application)
     
+    val sessionManager by lazy { com.example.auth.AuraSessionManager.getInstance(application) }
+    val auraSyncManager by lazy { com.example.sync.AuraSyncManager(application, repository.db) }
     val authManager by lazy { com.example.auth.AuthManager(application) }
     val syncManager by lazy { com.example.sync.FirestoreSyncManager(authManager, repository.db) }
 
@@ -47,6 +49,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     private val prefs = application.getSharedPreferences("aura_prefs", android.content.Context.MODE_PRIVATE)
+
+    private val _userDisplayName = MutableStateFlow(
+        sessionManager.displayName ?: "Aadi"
+    )
+    val userDisplayName: StateFlow<String> = _userDisplayName
+
+    fun setUserDisplayName(name: String) {
+        _userDisplayName.value = name
+        sessionManager.saveSession(
+            token = sessionManager.accessToken ?: "aura_local_token",
+            id = sessionManager.userId ?: UUID.randomUUID().toString(),
+            email = sessionManager.userEmail ?: "user@aura.local",
+            name = name
+        )
+    }
 
     private val _hasSeenOnboarding = MutableStateFlow(
         prefs.getBoolean("has_seen_onboarding", false)
@@ -86,13 +103,25 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         // Auto-sync when network becomes available
         viewModelScope.launch {
             networkMonitor.networkStatus.collect { status ->
-                if (status is NetworkStatus.Available && authManager.isSignedIn) {
-                    SyncWorker.enqueueOneTime(application)
+                if (status is NetworkStatus.Available && (authManager.isSignedIn || sessionManager.isSignedIn)) {
+                    SyncWorker.enqueueOneTimeSync(application)
                 }
             }
         }
         // Schedule periodic background sync
         SyncWorker.schedulePeriodicSync(application)
+
+        // Focus Timer Ticker
+        viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(1000)
+                if (_isFocusTimerRunning.value && _focusTimerSeconds.value > 0) {
+                    _focusTimerSeconds.value -= 1
+                } else if (_isFocusTimerRunning.value && _focusTimerSeconds.value <= 0) {
+                    _isFocusTimerRunning.value = false
+                }
+            }
+        }
     }
 
     private val _infoSheetTitle = MutableStateFlow<String?>(null)
@@ -171,7 +200,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     // DEFAULTS & GLOBAL STATE
     // ==========================================
     private val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-    private val todayString: String get() = sdf.format(Date())
+    val todayString: String get() = sdf.format(Date())
+    val todayFormatted: String get() = SimpleDateFormat("EEEE, MMM d", Locale.US).format(Date())
+    val tomorrowString: String get() {
+        val cal = Calendar.getInstance()
+        cal.add(Calendar.DAY_OF_YEAR, 1)
+        return sdf.format(cal.time)
+    }
 
     // Current navigation tab state
     private val _currentSection = MutableStateFlow(Section.Dashboard)
@@ -790,6 +825,137 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
         temp
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // ==========================================
+    // DAILY PLANS & LOCK TOMORROW STATE
+    // ==========================================
+    val todayPlan: StateFlow<DailyPlan?> = repository.getPlanForDate(todayString)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val tomorrowPlan: StateFlow<DailyPlan?> = repository.getPlanForDate(tomorrowString)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val isTodayLocked: StateFlow<Boolean> = todayPlan
+        .map { it?.status == "LOCKED" }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val isTomorrowLocked: StateFlow<Boolean> = tomorrowPlan
+        .map { it?.status == "LOCKED" }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    fun lockTomorrowPlan(orderedTasks: List<Task>, reason: String? = null) {
+        viewModelScope.launch {
+            val planItems = orderedTasks.mapIndexed { index, task ->
+                DailyPlanItem(
+                    planDate = tomorrowString,
+                    taskId = task.id,
+                    taskSyncId = task.syncId,
+                    sortOrder = index,
+                    scheduledStart = task.time,
+                    durationMinutes = 30
+                )
+            }
+            repository.lockDailyPlan(
+                date = tomorrowString,
+                reason = reason,
+                orderedItems = planItems
+            )
+        }
+    }
+
+    fun unlockOrAdaptTomorrowPlan(reason: String? = null) {
+        viewModelScope.launch {
+            val existing = repository.getPlanForDate(tomorrowString).firstOrNull()
+            if (existing != null) {
+                repository.saveDailyPlan(
+                    existing.copy(status = "MODIFIED", lockReason = reason, updatedAt = System.currentTimeMillis())
+                )
+            }
+        }
+    }
+
+    // ==========================================
+    // DETERMINISTIC CURRENT FOCUS ENGINE
+    // Invariant: Active -> Scheduled Time -> Next Critical -> Next Planned
+    // ==========================================
+    private val _activeFocusTaskId = MutableStateFlow<Int?>(null)
+    val activeFocusTaskId: StateFlow<Int?> = _activeFocusTaskId
+
+    val _isFocusTimerRunning = MutableStateFlow(false)
+    val isFocusTimerRunning: StateFlow<Boolean> = _isFocusTimerRunning
+
+    val _focusTimerSeconds = MutableStateFlow(25 * 60)
+    val focusTimerSeconds: StateFlow<Int> = _focusTimerSeconds
+
+    val currentFocusTask: StateFlow<Task?> = combine(
+        allTasks,
+        _activeFocusTaskId
+    ) { tasks, manualFocusId ->
+        val todayTasks = tasks.filter { it.date == todayString && !it.isCompleted }
+        if (todayTasks.isEmpty()) return@combine null
+
+        // 1. Manually started focus session
+        if (manualFocusId != null) {
+            val active = todayTasks.find { it.id == manualFocusId }
+            if (active != null) return@combine active
+        }
+
+        // 2. Task matching current hour
+        val currentHourStr = SimpleDateFormat("HH", Locale.US).format(Date())
+        val matchingHourTask = todayTasks.find { task ->
+            task.time?.startsWith(currentHourStr) == true
+        }
+        if (matchingHourTask != null) return@combine matchingHourTask
+
+        // 3. Next Critical / Urgent task
+        val urgentTask = todayTasks.find {
+            it.priority.equals("Urgent", ignoreCase = true) || it.priority.equals("Critical", ignoreCase = true)
+        }
+        if (urgentTask != null) return@combine urgentTask
+
+        // 4. Next High priority task
+        val highTask = todayTasks.find {
+            it.priority.equals("High", ignoreCase = true) || it.priority.equals("Important", ignoreCase = true)
+        }
+        if (highTask != null) return@combine highTask
+
+        // 5. Next planned task
+        todayTasks.firstOrNull()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    fun startFocus(task: Task) {
+        _activeFocusTaskId.value = task.id
+        _focusTimerSeconds.value = 25 * 60
+        _isFocusTimerRunning.value = true
+    }
+
+    fun toggleFocusTimer() {
+        _isFocusTimerRunning.value = !_isFocusTimerRunning.value
+    }
+
+    fun resetFocusTimer() {
+        _isFocusTimerRunning.value = false
+        _focusTimerSeconds.value = 25 * 60
+    }
+
+    fun completeCurrentFocus(task: Task) {
+        toggleTaskCompleted(task)
+        _isFocusTimerRunning.value = false
+        if (_activeFocusTaskId.value == task.id) {
+            _activeFocusTaskId.value = null
+        }
+    }
+
+    fun rescheduleTask(task: Task, newDate: String) {
+        viewModelScope.launch {
+            val updated = task.copy(date = newDate)
+            repository.updateTask(updated)
+            if (_activeFocusTaskId.value == task.id) {
+                _activeFocusTaskId.value = null
+                _isFocusTimerRunning.value = false
+            }
+        }
+    }
 
     fun saveTask(title: String, description: String, priority: String, energy: String, date: String, time: String?, category: String, tags: String, recurrence: String, subtaskTitles: List<String>) {
         viewModelScope.launch {

@@ -406,6 +406,7 @@ fun OnboardingScreen(
                             icon = Icons.Default.KeyboardDoubleArrowRight,
                             onClick = {
                                 viewModel.setHasSeenOnboarding(true)
+                                viewModel.sessionManager.setOnboardingComplete(true)
                                 onFinished()
                             },
                             modifier = Modifier.fillMaxWidth().height(52.dp),

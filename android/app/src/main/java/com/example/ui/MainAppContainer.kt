@@ -2245,6 +2245,12 @@ fun DashboardScreen(
     val journals by viewModel.journalEntries.collectAsState()
     val isDashboardLoading by viewModel.isDashboardLoading.collectAsState()
 
+    val userDisplayName by viewModel.userDisplayName.collectAsState()
+    val isTodayLocked by viewModel.isTodayLocked.collectAsState()
+    val currentFocusTask by viewModel.currentFocusTask.collectAsState()
+    val isFocusTimerRunning by viewModel.isFocusTimerRunning.collectAsState()
+    val focusTimerSeconds by viewModel.focusTimerSeconds.collectAsState()
+
     val todayDate = SimpleDateFormat("EEEE, dd MMM yyyy", Locale.US).format(Date())
     val todayString = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 
@@ -2273,14 +2279,15 @@ fun DashboardScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val greeting = remember {
+                val greeting = remember(userDisplayName) {
                     val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-                    when {
+                    val timeGreeting = when {
                         hour in 5..11 -> "Good Morning"
                         hour in 12..16 -> "Good Afternoon"
                         hour in 17..21 -> "Good Evening"
                         else -> "Good Night"
                     }
+                    "$timeGreeting, $userDisplayName ☀️"
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
@@ -2300,6 +2307,323 @@ fun DashboardScreen(
                     onProClick = { viewModel.navigateTo(Section.SecuritySettings) },
                     onProfileClick = { viewModel.navigateTo(Section.SecuritySettings) }
                 )
+            }
+        }
+
+        // ==========================================
+        // SCREEN 11: PLAN STATUS BANNER
+        // ==========================================
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .auraSpringPress(
+                        cornerRadius = 16.dp,
+                        onClick = { viewModel.navigateTo(Section.Tasks) }
+                    )
+                    .border(
+                        1.dp,
+                        if (isTodayLocked) AuraTheme.colors.positiveGreen.copy(alpha = 0.5f) else AuraTheme.colors.cardBorder,
+                        RoundedCornerShape(16.dp)
+                    ),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isTodayLocked) AuraTheme.colors.positiveGreen.copy(alpha = 0.1f) else AuraTheme.colors.cardBackground
+                ),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (isTodayLocked) AuraTheme.colors.positiveGreen.copy(alpha = 0.2f)
+                                    else AuraTheme.colors.accentBrand.copy(alpha = 0.2f)
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = if (isTodayLocked) Icons.Default.Lock else Icons.Default.Bolt,
+                                contentDescription = null,
+                                tint = if (isTodayLocked) AuraTheme.colors.positiveGreen else AuraTheme.colors.accentBrand,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Column {
+                            Text(
+                                text = if (isTodayLocked) "Today Planned & Locked 🔒" else "Day Not Planned Yet",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = AuraTheme.colors.textPrimary
+                            )
+                            Text(
+                                text = if (isTodayLocked) "${stats.todayCompletedTasksCount} of ${stats.todayTasksCount} objectives finished" else "Lock in commitments to sharpen focus",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = AuraTheme.colors.textSecondary,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+
+                    if (!isTodayLocked) {
+                        Button(
+                            onClick = { viewModel.navigateTo(Section.Tasks) },
+                            colors = ButtonDefaults.buttonColors(containerColor = AuraTheme.colors.accentBrand),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Text("Plan Day", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
+        // ==========================================
+        // SCREEN 11: DETERMINISTIC CURRENT FOCUS CARD
+        // ==========================================
+        item {
+            if (currentFocusTask != null) {
+                val focusTask = currentFocusTask!!
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(
+                            1.5.dp,
+                            AuraTheme.colors.accentBrand.copy(alpha = 0.7f),
+                            RoundedCornerShape(24.dp)
+                        ),
+                    colors = CardDefaults.cardColors(containerColor = AuraTheme.colors.cardBackground),
+                    shape = RoundedCornerShape(24.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        // Top Row: CURRENT FOCUS label + Priority badge
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (isFocusTimerRunning) AuraTheme.colors.positiveGreen
+                                            else AuraTheme.colors.accentBrand
+                                        )
+                                )
+                                Text(
+                                    text = if (isFocusTimerRunning) "FOCUS IN PROGRESS" else "CURRENT FOCUS",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Black,
+                                    color = AuraTheme.colors.accentBrand,
+                                    letterSpacing = 1.2.sp
+                                )
+                            }
+
+                            // Priority Chip
+                            val priorityColor = when (focusTask.priority.lowercase()) {
+                                "urgent", "critical" -> Color(0xFFEF4444)
+                                "high", "important" -> Color(0xFFF59E0B)
+                                else -> AuraTheme.colors.accentBrand
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(priorityColor.copy(alpha = 0.15f))
+                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    text = focusTask.priority.uppercase(),
+                                    color = priorityColor,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                            }
+                        }
+
+                        // Title
+                        Text(
+                            text = focusTask.title,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Black,
+                            color = AuraTheme.colors.textPrimary
+                        )
+
+                        // Subtitle / Time / Energy
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Schedule,
+                                    contentDescription = null,
+                                    tint = AuraTheme.colors.textMuted,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = focusTask.time?.ifBlank { "Anytime" } ?: "Anytime",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = AuraTheme.colors.textSecondary
+                                )
+                            }
+                            Text("•", color = AuraTheme.colors.textMuted)
+                            Text(
+                                text = focusTask.energy,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = AuraTheme.colors.accentBrand,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+
+                        // Timer or Action Row
+                        if (isFocusTimerRunning || focusTimerSeconds < 25 * 60) {
+                            val minutes = focusTimerSeconds / 60
+                            val seconds = focusTimerSeconds % 60
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(AuraTheme.colors.screenBackground)
+                                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = String.format(Locale.US, "%02d:%02d", minutes, seconds),
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    fontWeight = FontWeight.Black,
+                                    color = AuraTheme.colors.accentBrand
+                                )
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    IconButton(
+                                        onClick = { viewModel.toggleFocusTimer() },
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(CircleShape)
+                                            .background(AuraTheme.colors.cardBackground)
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isFocusTimerRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                            contentDescription = "Toggle Timer",
+                                            tint = AuraTheme.colors.textPrimary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { viewModel.completeCurrentFocus(focusTask) },
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(CircleShape)
+                                            .background(AuraTheme.colors.positiveGreen)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = "Complete",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Button(
+                                    onClick = { viewModel.startFocus(focusTask) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = AuraTheme.colors.accentBrand),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.weight(1f).height(44.dp)
+                                ) {
+                                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Start Focus", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                                OutlinedButton(
+                                    onClick = { viewModel.completeCurrentFocus(focusTask) },
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = BorderStroke(1.dp, AuraTheme.colors.cardBorder),
+                                    modifier = Modifier.height(44.dp)
+                                ) {
+                                    Icon(Icons.Default.Check, contentDescription = null, tint = AuraTheme.colors.positiveGreen, modifier = Modifier.size(16.dp))
+                                }
+                                OutlinedButton(
+                                    onClick = { viewModel.rescheduleTask(focusTask, viewModel.tomorrowString) },
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = BorderStroke(1.dp, AuraTheme.colors.cardBorder),
+                                    modifier = Modifier.height(44.dp)
+                                ) {
+                                    Icon(Icons.Default.Update, contentDescription = "Move to Tomorrow", tint = AuraTheme.colors.textSecondary, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if (stats.todayTasksCount > 0 && stats.todayCompletedTasksCount >= stats.todayTasksCount) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, AuraTheme.colors.cardBorder, RoundedCornerShape(24.dp)),
+                    colors = CardDefaults.cardColors(containerColor = AuraTheme.colors.cardBackground),
+                    shape = RoundedCornerShape(24.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("🎉", fontSize = 32.sp)
+                        Text(
+                            "All objectives completed today!",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = AuraTheme.colors.textPrimary
+                        )
+                        Text(
+                            "You've crushed today's plan. Lock in tomorrow's commitments to maintain your streak.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = AuraTheme.colors.textSecondary,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Button(
+                            onClick = { viewModel.navigateTo(Section.Tasks) },
+                            colors = ButtonDefaults.buttonColors(containerColor = AuraTheme.colors.accentBrand),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Plan Tomorrow 🔒", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
             }
         }
 
@@ -2474,7 +2798,6 @@ fun DashboardScreen(
             }
         }
 
-        val todayString = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
         val todayTasks = tasksList.filter { it.date == todayString }
 
         if (todayTasks.isEmpty()) {

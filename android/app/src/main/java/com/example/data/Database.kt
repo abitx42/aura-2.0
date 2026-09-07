@@ -482,6 +482,74 @@ interface MoneyDao {
 }
 
 // ==========================================
+// 7. DAILY PLANS & LOCK TOMORROW ENTITIES
+// ==========================================
+
+@Entity(
+    tableName = "daily_plans",
+    indices = [Index(value = ["planDate"], unique = true)]
+)
+data class DailyPlan(
+    @PrimaryKey val id: String = java.util.UUID.randomUUID().toString(),
+    val planDate: String, // YYYY-MM-DD
+    val status: String = "DRAFT", // DRAFT, LOCKED, MODIFIED, COMPLETED
+    val lockedAt: Long? = null,
+    val lockReason: String? = null,
+    val morningNotes: String? = null,
+    val targetSleepTime: String? = null,
+    val version: Int = 1,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isSynced: Boolean = false,
+    val syncId: String = java.util.UUID.randomUUID().toString(),
+    val isDeleted: Boolean = false
+)
+
+@Entity(
+    tableName = "daily_plan_items",
+    indices = [Index(value = ["planDate"]), Index(value = ["taskId"])]
+)
+data class DailyPlanItem(
+    @PrimaryKey val id: String = java.util.UUID.randomUUID().toString(),
+    val planDate: String, // YYYY-MM-DD
+    val taskId: Int,
+    val taskSyncId: String = "",
+    val sortOrder: Int = 0,
+    val scheduledStart: String? = null,
+    val durationMinutes: Int = 30
+)
+
+@Dao
+interface DailyPlanDao {
+    @Query("SELECT * FROM daily_plans WHERE planDate = :date AND isDeleted = 0 LIMIT 1")
+    fun getPlanForDate(date: String): Flow<DailyPlan?>
+
+    @Query("SELECT * FROM daily_plans WHERE planDate = :date AND isDeleted = 0 LIMIT 1")
+    suspend fun getPlanForDateSync(date: String): DailyPlan?
+
+    @Query("SELECT * FROM daily_plans WHERE syncId = :syncId LIMIT 1")
+    suspend fun getPlanBySyncId(syncId: String): DailyPlan?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPlan(plan: DailyPlan): Long
+
+    @Update
+    suspend fun updatePlan(plan: DailyPlan)
+
+    @Query("UPDATE daily_plans SET status = 'LOCKED', lockedAt = :lockedAt, lockReason = :reason, updatedAt = :lockedAt WHERE planDate = :date")
+    suspend fun lockPlan(date: String, lockedAt: Long, reason: String? = null)
+
+    @Query("SELECT * FROM daily_plan_items WHERE planDate = :date ORDER BY sortOrder ASC")
+    fun getPlanItemsForDate(date: String): Flow<List<DailyPlanItem>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPlanItems(items: List<DailyPlanItem>)
+
+    @Query("DELETE FROM daily_plan_items WHERE planDate = :date")
+    suspend fun deletePlanItemsForDate(date: String)
+}
+
+// ==========================================
 // DATABASE CONTAINER
 // ==========================================
 
@@ -502,9 +570,11 @@ interface MoneyDao {
         Debt::class,
         SavingsGoal::class,
         MoneyReminder::class,
-        PendingOperation::class
+        PendingOperation::class,
+        DailyPlan::class,
+        DailyPlanItem::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -515,4 +585,5 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun securityDao(): SecurityDao
     abstract fun moneyDao(): MoneyDao
     abstract fun pendingOperationDao(): PendingOperationDao
+    abstract fun dailyPlanDao(): DailyPlanDao
 }

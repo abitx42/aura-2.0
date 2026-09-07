@@ -56,6 +56,8 @@ fun TasksScreen(
     var showKanbanBoard by remember { mutableStateOf(true) }
     var taskToTime by remember { mutableStateOf<Task?>(null) }
     var selectedTimerMinutes by remember { mutableStateOf("25") }
+    var selectedPlanTab by remember { mutableStateOf("Today") }
+    val isTomorrowLocked by viewModel.isTomorrowLocked.collectAsState()
 
     Box(
         modifier = Modifier
@@ -76,7 +78,7 @@ fun TasksScreen(
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
-                        text = "Objectives",
+                        text = "Plan & Objectives",
                         style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.ExtraBold,
                         color = AuraTheme.colors.textPrimary
@@ -94,8 +96,71 @@ fun TasksScreen(
                 )
             }
 
-            // View toggle switcher toolbar
+            // SCREEN 12: PLAN OVERVIEW TABS
             Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf("Today", "Tomorrow", "Upcoming").forEach { tab ->
+                    val isSelected = selectedPlanTab == tab
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                if (isSelected) AuraTheme.colors.accentBrand
+                                else AuraTheme.colors.cardBackground
+                            )
+                            .border(
+                                1.dp,
+                                if (isSelected) AuraTheme.colors.accentBrand else AuraTheme.colors.cardBorder,
+                                RoundedCornerShape(12.dp)
+                            )
+                            .clickable {
+                                AuraHaptics.triggerSelection(view)
+                                selectedPlanTab = tab
+                            }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            if (tab == "Tomorrow" && isTomorrowLocked) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = "Locked",
+                                    tint = if (isSelected) Color.White else AuraTheme.colors.accentBrand,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            }
+                            Text(
+                                text = tab,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
+                                color = if (isSelected) Color.White else AuraTheme.colors.textSecondary
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (selectedPlanTab == "Tomorrow") {
+                PlanTomorrowScreen(
+                    viewModel = viewModel,
+                    onOpenTaskComposer = onOpenTaskComposer
+                )
+            } else if (selectedPlanTab == "Upcoming") {
+                UpcomingPlanScreen(
+                    viewModel = viewModel,
+                    onOpenTaskComposer = onOpenTaskComposer
+                )
+            } else {
+                // View toggle switcher toolbar
+                Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 4.dp),
@@ -400,6 +465,7 @@ fun TasksScreen(
                     }
                 }
             }
+        }
         }
     }
 
@@ -1201,6 +1267,570 @@ fun TaskComposerScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Delete Objective Permanently", color = Color.White, fontWeight = FontWeight.Bold)
                     }
+                }
+            }
+        }
+    }
+}
+
+// ==========================================
+// SCREEN 13 & 16: PLAN TOMORROW & LOCK TOMORROW
+// ==========================================
+@Composable
+fun PlanTomorrowScreen(
+    viewModel: AppViewModel,
+    onOpenTaskComposer: (Task?) -> Unit
+) {
+    val tasksList by viewModel.allTasks.collectAsState()
+    val isTomorrowLocked by viewModel.isTomorrowLocked.collectAsState()
+    val tomorrowPlan by viewModel.tomorrowPlan.collectAsState()
+    val view = LocalView.current
+
+    var showLockConfirmDialog by remember { mutableStateOf(false) }
+    var showAdaptPlanDialog by remember { mutableStateOf(false) }
+    var adaptReasonText by remember { mutableStateOf("") }
+
+    val tomorrowString = viewModel.tomorrowString
+    val todayString = viewModel.todayString
+
+    val tomorrowTasks = remember(tasksList, tomorrowString) {
+        tasksList.filter { it.date == tomorrowString }
+    }
+    val unfinishedToday = remember(tasksList, todayString) {
+        tasksList.filter { it.date == todayString && !it.isCompleted }
+    }
+
+    val estimatedTotalMinutes = tomorrowTasks.size * 30
+    val plannedHours = estimatedTotalMinutes / 60
+    val plannedMinutes = estimatedTotalMinutes % 60
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+        contentPadding = PaddingValues(vertical = 12.dp)
+    ) {
+        // 1. LOCK STATUS & BANNER
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(
+                        1.dp,
+                        if (isTomorrowLocked) AuraTheme.colors.positiveGreen.copy(alpha = 0.6f)
+                        else AuraTheme.colors.accentBrand.copy(alpha = 0.5f),
+                        RoundedCornerShape(20.dp)
+                    ),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isTomorrowLocked) AuraTheme.colors.positiveGreen.copy(alpha = 0.1f)
+                    else AuraTheme.colors.cardBackground
+                ),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isTomorrowLocked) Icons.Default.Lock else Icons.Default.EditCalendar,
+                                contentDescription = null,
+                                tint = if (isTomorrowLocked) AuraTheme.colors.positiveGreen else AuraTheme.colors.accentBrand,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = if (isTomorrowLocked) "TOMORROW IS LOCKED 🔒" else "PLAN TOMORROW",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Black,
+                                color = if (isTomorrowLocked) AuraTheme.colors.positiveGreen else AuraTheme.colors.accentBrand,
+                                letterSpacing = 1.sp
+                            )
+                        }
+
+                        if (isTomorrowLocked) {
+                            TextButton(
+                                onClick = { showAdaptPlanDialog = true },
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("Adapt Plan", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = AuraTheme.colors.accentBrand)
+                            }
+                        }
+                    }
+
+                    Text(
+                        text = if (isTomorrowLocked)
+                            "Your commitments for tomorrow ($tomorrowString) are locked. Sleep with peace of mind."
+                        else
+                            "Review commitments, triage today's open items, and lock your plan before bed for morning focus.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AuraTheme.colors.textSecondary,
+                        lineHeight = 18.sp
+                    )
+                }
+            }
+        }
+
+        // 2. STEP 1: ROUTINE & WAKING WINDOW
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth().border(1.dp, AuraTheme.colors.cardBorder, RoundedCornerShape(16.dp)),
+                colors = CardDefaults.cardColors(containerColor = AuraTheme.colors.cardBackground),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceAround,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("TARGET WAKE", style = MaterialTheme.typography.labelSmall, color = AuraTheme.colors.textMuted, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text("07:00 AM ☀️", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = AuraTheme.colors.textPrimary)
+                    }
+                    Box(modifier = Modifier.height(30.dp).width(1.dp).background(AuraTheme.colors.cardBorder))
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("TARGET SLEEP", style = MaterialTheme.typography.labelSmall, color = AuraTheme.colors.textMuted, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text("11:00 PM 🌙", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = AuraTheme.colors.textPrimary)
+                    }
+                    Box(modifier = Modifier.height(30.dp).width(1.dp).background(AuraTheme.colors.cardBorder))
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("WAKING BUDGET", style = MaterialTheme.typography.labelSmall, color = AuraTheme.colors.textMuted, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text("16 Hours", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = AuraTheme.colors.accentBrand)
+                    }
+                }
+            }
+        }
+
+        // 3. STEP 2: TRIAGE UNFINISHED TASKS FROM TODAY
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "STEP 2: TRIAGE UNFINISHED TODAY (${unfinishedToday.size})",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Black,
+                        color = AuraTheme.colors.textMuted,
+                        letterSpacing = 1.sp
+                    )
+                }
+
+                if (unfinishedToday.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(AuraTheme.colors.cardBackground)
+                            .border(1.dp, AuraTheme.colors.cardBorder, RoundedCornerShape(12.dp))
+                            .padding(14.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = AuraTheme.colors.positiveGreen, modifier = Modifier.size(16.dp))
+                            Text("No open tasks to triage from today!", style = MaterialTheme.typography.bodySmall, color = AuraTheme.colors.textSecondary)
+                        }
+                    }
+                } else {
+                    unfinishedToday.forEach { task ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth().border(1.dp, AuraTheme.colors.cardBorder, RoundedCornerShape(14.dp)),
+                            colors = CardDefaults.cardColors(containerColor = AuraTheme.colors.cardBackground),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(task.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = AuraTheme.colors.textPrimary)
+                                    Text("${task.priority} • ${task.energy}", style = MaterialTheme.typography.labelSmall, color = AuraTheme.colors.textMuted)
+                                }
+                                Button(
+                                    onClick = {
+                                        AuraHaptics.triggerSelection(view)
+                                        viewModel.rescheduleTask(task, tomorrowString)
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = AuraTheme.colors.accentBrand),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    modifier = Modifier.height(32.dp)
+                                ) {
+                                    Text("Move to Tomorrow", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4. STEP 3: TOMORROW'S PRIORITIES
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "STEP 3: TOMORROW'S PRIORITIES (${tomorrowTasks.size})",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Black,
+                        color = AuraTheme.colors.textMuted,
+                        letterSpacing = 1.sp
+                    )
+
+                    TextButton(
+                        onClick = {
+                            onOpenTaskComposer(Task(title = "", date = tomorrowString, category = "Work", priority = "High"))
+                        }
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, tint = AuraTheme.colors.accentBrand, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Add Priority", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = AuraTheme.colors.accentBrand)
+                    }
+                }
+
+                if (tomorrowTasks.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(AuraTheme.colors.cardBackground)
+                            .border(1.dp, AuraTheme.colors.cardBorder, RoundedCornerShape(14.dp))
+                            .padding(20.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(Icons.Default.FormatListBulleted, contentDescription = null, tint = AuraTheme.colors.textMuted)
+                            Text("No objectives set yet for tomorrow.", style = MaterialTheme.typography.bodySmall, color = AuraTheme.colors.textMuted)
+                            Button(
+                                onClick = {
+                                    onOpenTaskComposer(Task(title = "", date = tomorrowString, category = "Work", priority = "High"))
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = AuraTheme.colors.accentBrand),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("Add First Commitment", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                } else {
+                    tomorrowTasks.forEachIndexed { index, task ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .auraSpringPress(
+                                    cornerRadius = 14.dp,
+                                    onClick = { onOpenTaskComposer(task) }
+                                )
+                                .border(1.dp, AuraTheme.colors.cardBorder, RoundedCornerShape(14.dp)),
+                            colors = CardDefaults.cardColors(containerColor = AuraTheme.colors.cardBackground),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(14.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(24.dp)
+                                            .clip(CircleShape)
+                                            .background(AuraTheme.colors.accentBrand.copy(alpha = 0.15f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("${index + 1}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = AuraTheme.colors.accentBrand)
+                                    }
+
+                                    Column {
+                                        Text(task.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = AuraTheme.colors.textPrimary)
+                                        Text(
+                                            text = "${task.time?.ifBlank { "Anytime" } ?: "Anytime"} • ${task.priority} • ${task.energy}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = AuraTheme.colors.textMuted
+                                        )
+                                    }
+                                }
+
+                                IconButton(
+                                    onClick = { viewModel.deleteTaskPermanently(task) },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(Icons.Default.Close, contentDescription = "Remove", tint = AuraTheme.colors.textMuted, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 5. STEP 4: TIME BUDGET ANALYSIS
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth().border(1.dp, AuraTheme.colors.cardBorder, RoundedCornerShape(16.dp)),
+                colors = CardDefaults.cardColors(containerColor = AuraTheme.colors.cardBackground),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "STEP 4: TIME BUDGET ANALYSIS",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Black,
+                        color = AuraTheme.colors.textMuted,
+                        letterSpacing = 1.sp
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Total Estimated Commitment:", style = MaterialTheme.typography.bodySmall, color = AuraTheme.colors.textSecondary)
+                        Text("${plannedHours}h ${plannedMinutes}m", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Black, color = AuraTheme.colors.accentBrand)
+                    }
+
+                    if (estimatedTotalMinutes > 10 * 60) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFFEF4444).copy(alpha = 0.15f))
+                                .padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFEF4444), modifier = Modifier.size(16.dp))
+                            Text(
+                                "High workload (>10 hrs). Consider trimming to top 3 priorities.",
+                                fontSize = 11.sp,
+                                color = Color(0xFFEF4444),
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    } else {
+                        Text(
+                            "✅ Healthy, balanced schedule with sufficient buffer time.",
+                            fontSize = 11.sp,
+                            color = AuraTheme.colors.positiveGreen,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+        }
+
+        // 6. PRIMARY LOCK CTA
+        item {
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = {
+                    AuraHaptics.triggerSelection(view)
+                    showLockConfirmDialog = true
+                },
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isTomorrowLocked) AuraTheme.colors.positiveGreen else AuraTheme.colors.accentBrand
+                ),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = if (isTomorrowLocked) "LOCK UPDATED COMMITMENT 🔒" else "LOCK TOMORROW 🔒",
+                    color = Color.White,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 13.sp,
+                    letterSpacing = 1.sp
+                )
+            }
+        }
+    }
+
+    // LOCK CONFIRMATION DIALOG
+    if (showLockConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showLockConfirmDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Default.Lock, contentDescription = null, tint = AuraTheme.colors.accentBrand)
+                    Text("Lock Tomorrow's Commitment", fontWeight = FontWeight.Bold, color = AuraTheme.colors.textPrimary)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Are you ready to lock in tomorrow's plan ($tomorrowString)?",
+                        color = AuraTheme.colors.textPrimary,
+                        fontSize = 13.sp
+                    )
+                    Text(
+                        "• ${tomorrowTasks.size} objectives committed\n• Estimated duration: ${plannedHours}h ${plannedMinutes}m\n• Wake target: 07:00 AM ☀️",
+                        color = AuraTheme.colors.textSecondary,
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp
+                    )
+                    Text(
+                        "Locking removes morning decision fatigue and sets up your deterministic Current Focus.",
+                        color = AuraTheme.colors.accentBrand,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.lockTomorrowPlan(tomorrowTasks)
+                        showLockConfirmDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AuraTheme.colors.accentBrand),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Confirm & Lock 🔒", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLockConfirmDialog = false }) {
+                    Text("Cancel", color = AuraTheme.colors.textMuted)
+                }
+            },
+            containerColor = AuraTheme.colors.cardBackground,
+            shape = RoundedCornerShape(20.dp)
+        )
+    }
+
+    // ADAPT PLAN REASON DIALOG (ADR / PRD Screen 16)
+    if (showAdaptPlanDialog) {
+        AlertDialog(
+            onDismissRequest = { showAdaptPlanDialog = false },
+            title = {
+                Text("Adapt Locked Plan", fontWeight = FontWeight.Bold, color = AuraTheme.colors.textPrimary)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "You are updating a locked plan. Providing an optional reason helps Aura calibrate your future planning.",
+                        color = AuraTheme.colors.textSecondary,
+                        fontSize = 12.sp
+                    )
+                    OutlinedTextField(
+                        value = adaptReasonText,
+                        onValueChange = { adaptReasonText = it },
+                        placeholder = { Text("e.g. Unexpected event, emergency, underestimation", color = AuraTheme.colors.textMuted, fontSize = 12.sp) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = AuraTheme.colors.accentBrand,
+                            unfocusedBorderColor = AuraTheme.colors.cardBorder,
+                            focusedTextColor = AuraTheme.colors.textPrimary,
+                            unfocusedTextColor = AuraTheme.colors.textPrimary
+                        )
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.unlockOrAdaptTomorrowPlan(adaptReasonText.ifBlank { "Plan adapted by user" })
+                        showAdaptPlanDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AuraTheme.colors.accentBrand),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Unlock & Adapt", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAdaptPlanDialog = false }) {
+                    Text("Keep Locked", color = AuraTheme.colors.textMuted)
+                }
+            },
+            containerColor = AuraTheme.colors.cardBackground,
+            shape = RoundedCornerShape(20.dp)
+        )
+    }
+}
+
+// ==========================================
+// UPCOMING PLAN SCREEN
+// ==========================================
+@Composable
+fun UpcomingPlanScreen(
+    viewModel: AppViewModel,
+    onOpenTaskComposer: (Task?) -> Unit
+) {
+    val tasksList by viewModel.allTasks.collectAsState()
+    val tomorrowString = viewModel.tomorrowString
+    val upcomingTasks = remember(tasksList, tomorrowString) {
+        tasksList.filter { it.date > tomorrowString }
+            .sortedBy { it.date }
+    }
+
+    if (upcomingTasks.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            AuraEmptyState(
+                title = "No Upcoming Objectives",
+                description = "Plan ahead by scheduling tasks for future dates beyond tomorrow.",
+                icon = Icons.Default.EventNote,
+                iconTint = AuraTheme.colors.accentBrand
+            )
+        }
+    } else {
+        val groupedByDate = upcomingTasks.groupBy { it.date }
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(vertical = 12.dp)
+        ) {
+            groupedByDate.forEach { (dateStr, tasksForDate) ->
+                item {
+                    Text(
+                        text = dateStr,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Black,
+                        color = AuraTheme.colors.accentBrand,
+                        letterSpacing = 1.sp
+                    )
+                }
+                items(tasksForDate, key = { it.id }) { task ->
+                    TaskRowItem(
+                        task = task,
+                        onClicked = { onOpenTaskComposer(task) },
+                        onToggleCompleted = { viewModel.toggleTaskCompleted(task) },
+                        onStartTimer = {}
+                    )
                 }
             }
         }

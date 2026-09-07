@@ -12,7 +12,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class AppRepository(val db: AppDatabase) {
+class AppRepository(val db: AppDatabase, val context: Context? = null) {
 
     private val noteDao = db.noteDao()
     private val taskDao = db.taskDao()
@@ -21,8 +21,19 @@ class AppRepository(val db: AppDatabase) {
     private val securityDao = db.securityDao()
     private val moneyDao = db.moneyDao()
     private val pendingDao = db.pendingOperationDao()
+    private val dailyPlanDao = db.dailyPlanDao()
 
     val pendingOperationsCount: Flow<Int> = pendingDao.getPendingCount()
+
+    private fun triggerSync() {
+        context?.let { ctx ->
+            try {
+                com.example.sync.SyncWorker.enqueueOneTimeSync(ctx)
+            } catch (e: Exception) {
+                // Silently fallback if WorkManager not initialized in tests
+            }
+        }
+    }
 
     // Singleton provider for Ease of Constructor DI
     companion object {
@@ -38,7 +49,7 @@ class AppRepository(val db: AppDatabase) {
                 )
                 .fallbackToDestructiveMigration() // ensure seamless developers builds
                 .build()
-                val repo = AppRepository(db)
+                val repo = AppRepository(db, context.applicationContext)
                 INSTANCE = repo
                 repo
             }
@@ -167,6 +178,7 @@ class AppRepository(val db: AppDatabase) {
             operationType = "CREATE",
             entitySyncId = task.syncId
         ))
+        triggerSync()
     }
 
     suspend fun updateTask(task: Task) = withContext(Dispatchers.IO) {
@@ -176,6 +188,7 @@ class AppRepository(val db: AppDatabase) {
             operationType = "UPDATE",
             entitySyncId = task.syncId
         ))
+        triggerSync()
     }
 
     suspend fun deleteTask(task: Task) = withContext(Dispatchers.IO) {
@@ -186,6 +199,60 @@ class AppRepository(val db: AppDatabase) {
             operationType = "DELETE",
             entitySyncId = task.syncId
         ))
+        triggerSync()
+    }
+
+    // ==========================================
+    // DAILY PLANS & LOCK TOMORROW OPERATIONS
+    // ==========================================
+
+    fun getPlanForDate(date: String): Flow<DailyPlan?> = dailyPlanDao.getPlanForDate(date)
+
+    fun getPlanItemsForDate(date: String): Flow<List<DailyPlanItem>> = dailyPlanDao.getPlanItemsForDate(date)
+
+    suspend fun saveDailyPlan(plan: DailyPlan, items: List<DailyPlanItem> = emptyList()) = withContext(Dispatchers.IO) {
+        val existing = dailyPlanDao.getPlanForDateSync(plan.planDate)
+        val planToSave = if (existing != null) {
+            plan.copy(id = existing.id, version = existing.version + 1, updatedAt = System.currentTimeMillis())
+        } else {
+            plan
+        }
+        dailyPlanDao.insertPlan(planToSave)
+        if (items.isNotEmpty()) {
+            dailyPlanDao.deletePlanItemsForDate(plan.planDate)
+            dailyPlanDao.insertPlanItems(items)
+        }
+        pendingDao.insert(PendingOperation(
+            entityType = "DAILY_PLAN",
+            operationType = if (existing != null) "UPDATE" else "CREATE",
+            entitySyncId = planToSave.syncId
+        ))
+        triggerSync()
+    }
+
+    suspend fun lockDailyPlan(
+        date: String,
+        reason: String? = null,
+        orderedItems: List<DailyPlanItem> = emptyList()
+    ) = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        val existing = dailyPlanDao.getPlanForDateSync(date)
+        val planToLock = if (existing != null) {
+            existing.copy(status = "LOCKED", lockedAt = now, lockReason = reason, updatedAt = now)
+        } else {
+            DailyPlan(planDate = date, status = "LOCKED", lockedAt = now, lockReason = reason)
+        }
+        dailyPlanDao.insertPlan(planToLock)
+        if (orderedItems.isNotEmpty()) {
+            dailyPlanDao.deletePlanItemsForDate(date)
+            dailyPlanDao.insertPlanItems(orderedItems)
+        }
+        pendingDao.insert(PendingOperation(
+            entityType = "DAILY_PLAN",
+            operationType = "LOCK",
+            entitySyncId = planToLock.syncId
+        ))
+        triggerSync()
     }
 
     suspend fun addSubtask(subtask: Subtask) = withContext(Dispatchers.IO) {
