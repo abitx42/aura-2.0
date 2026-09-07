@@ -106,5 +106,5 @@ When evaluating Aura throughout the day, categorize observations into:
    adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 
    # Launch directly via verified component name:
-   adb shell am start -n com.aura.personalos/com.example.MainActivity
+   adb shell am start -n com.aura.personalos/.MainActivity
    ```

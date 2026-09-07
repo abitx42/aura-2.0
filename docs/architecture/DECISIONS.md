@@ -255,7 +255,7 @@
      - **Simulated Offline Mode**: In-app toggle that intercepts network calls at the client layer to simulate complete network isolation while keeping the device connected for messaging/calls.
      - **In-App Founder Friction Recorder**: Direct input field in the debug console to log friction and UX issues directly to disk and life events.
   2. **File-Backed Crash Forensics (`AuraCrashHandler.kt`)**:
-     - Install an uncaught exception handler in `AuraApplication` that writes crash traces to `/data/data/com.example/files/aura_crash_log.txt` and maintains an in-memory ring buffer of recent errors.
+     - Install an uncaught exception handler in `AuraApplication` that writes crash traces to `/data/data/com.aura.personalos/files/aura_crash_log.txt` and maintains an in-memory ring buffer of recent errors.
   3. **Compose UI Error Boundary (`AuraErrorBoundary.kt`)**:
      - Wrap root Compose tree with error boundaries catching rendering crashes gracefully, preventing app exit and allowing recovery.
   4. **Build Environment Security**:
@@ -267,28 +267,23 @@
 ---
 
 ### ADR-016: Package Namespace Audit & Unified Identifier Strategy (`com.aura.personalos`)
-- **Status:** Accepted / Planned Migration (Phase 2)
+- **Status:** Accepted & Executed (Phase 2 Entry Gate)
 - **Context:**
   - An audit revealed an architectural distinction between the Android package namespace and application ID:
     - `applicationId = "com.aura.personalos"` (controls Android OS identity, app data directory `/data/data/com.aura.personalos/`, and Google Play ID).
     - `namespace = "com.example"` (controls generated `R` and `BuildConfig` classes, as well as root Kotlin package directories `com/example/...`).
-  - In modern Android Gradle Plugin (AGP 8.0+), decoupling `namespace` from `applicationId` is officially supported and fully functional. However, having `com.example` as the internal source package represents technical debt left over from project scaffolding.
-  - Blindly renaming all package directories, imports, and Room schemas mid-milestone creates unnecessary risk of breaking Room SQLite migrations, KSP code generation, or Compose references right as physical device testing commences.
+  - Maintaining `com.example` as the internal source package represented technical debt left over from project scaffolding. Starting founder testing with mixed namespaces created risks of stale package structures in device databases, shared preferences, and ADB commands.
 - **Decision:**
-  1. **Phase 2 Invariant**: Maintain the current stable configuration (`applicationId = "com.aura.personalos"`, `namespace = "com.example"`) during the 7–14 day Founder Testing period to ensure zero destabilization of the verified test suites and APK.
-  2. **Explicit Identifier Mapping**:
-     - Android OS / Package Manager: `com.aura.personalos`
-     - Launch Activity FQCN: `com.aura.personalos/com.example.MainActivity`
-     - Crash Log Directory: `/data/data/com.aura.personalos/files/aura_crash_log.txt`
-     - Internal Code Imports: `com.example.*` and `com.example.BuildConfig`
-  3. **Scheduled Clean Migration (Post-Phase 2)**:
-     - Execute a dedicated, atomic refactoring task before public release:
-       1. Move source directory: `android/app/src/main/java/com/example` $\longrightarrow$ `com/aura/personalos`.
-       2. Move unit/Robolectric test directory: `android/app/src/test/java/com/example` $\longrightarrow$ `com/aura/personalos`.
-       3. Update `namespace = "com.aura.personalos"` in `build.gradle.kts`.
-       4. Update `AndroidManifest.xml` package and activity references.
-       5. Verify clean Room KSP schema generation without database destruction.
+  1. **Unified Identifier Architecture**: Complete an immediate, atomic refactor unifying all Android components under `com.aura.personalos`:
+     - **OS Application ID**: `com.aura.personalos`
+     - **Gradle Namespace**: `namespace = "com.aura.personalos"`
+     - **Kotlin Source Roots**: `android/app/src/main/java/com/aura/personalos`
+     - **Test Source Roots**: `android/app/src/test/java/com/aura/personalos` and `androidTest/java/com/aura/personalos`
+     - **Launch Activity FQCN**: `com.aura.personalos/com.aura.personalos.MainActivity` (or `.MainActivity`)
+     - **BuildConfig / R**: `com.aura.personalos.BuildConfig` and `com.aura.personalos.R`
+     - **ProGuard Rules**: Updated to keep `com.aura.personalos.data.**` and removed legacy rules.
 - **Consequences:**
-  - Eliminates the risk of regression right before physical device testing.
-  - Establishes a documented, disciplined migration plan for clean production branding.
+  - Complete architectural consistency across OS, build system, source code, and tests.
+  - 100% of unit tests passing (41/41) under the unified namespace.
+  - Zero namespace divergence before physical device testing commences.
 

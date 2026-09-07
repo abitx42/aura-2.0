@@ -79,7 +79,7 @@ Aura Personal OS features a custom theming architecture supporting **5 distinct 
 - 🖤 **AMOLED Mode**: Pure `#000000` pitch black for maximum OLED power efficiency.
 - ☀️ **Light Mode**: High-contrast `#FAFBFD` bone-white surface with crisp typography.
 
-### Shared UI Component Library (`com.example.ui.components`)
+### Shared UI Component Library (`com.aura.personalos.ui.components`)
 - **`AuraNumberedStat`**: Tracked eyebrow badge (`01 · SPENT`) with large bold numbers and subtitles.
 - **`AuraPrimaryAction` & `AuraSecondaryAction`**: Paired filled pill and dashed-outline action buttons with spring physics.
 - **`AuraProgressRing`**: Animated circular progress gauge for spend/budget/streak tracking.

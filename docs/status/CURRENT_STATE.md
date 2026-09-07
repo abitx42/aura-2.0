@@ -55,7 +55,7 @@
 | **Architecture & Sync Unification**| ✅ Complete | Full deprecation of Firebase, unified Room $\to$ Fastify sync, full entity payload serialization, action verbs. |
 | **Integrity & Fail-Closed Safety** | ✅ Complete | Plan locking task ownership validation, fail-closed Proposed Actions execution, locked plan focus priority. |
 | **Fastify TypeScript Backend**    | ✅ Complete | Node.js + TypeScript + PostgreSQL modular monolith with 7 modules & tests. |
-| **Android Client Networking**     | ✅ Complete | Retrofit2 + OkHttp + Moshi in `com.example.api.*` with JWT session manager. |
+| **Android Client Networking**     | ✅ Complete | Retrofit2 + OkHttp + Moshi in `com.aura.personalos.api.*` with JWT session manager. |
 | **Offline-First Sync Engine**     | ✅ Complete | Room `pending_operations` queue drained to Fastify backend via WorkManager. |
 | **Daily Plans & Day Locking**     | ✅ Complete | Room `daily_plans` & `daily_plan_items` entities, DAOs, and repository methods. |
 | **Deterministic Current Focus**   | ✅ Complete | Invariant 2 engine: Active $\to$ Locked Plan Sequence $\to$ Scheduled time $\to$ Critical. |
@@ -71,10 +71,10 @@
 ## 2. Active Components & Locations
 
 - **Android App**: `android/`
-  - API & Session: `com.example.api.AuraApiService`, `com.example.api.AuraApiClient`, `com.example.auth.AuraSessionManager`
-  - Sync Layer: `com.example.sync.AuraSyncManager`, `com.example.sync.SyncWorker`
-  - Database & Entities: `com.example.data.*` (`AppDatabase`, `Task`, `DailyPlan`, `DailyPlanItem`, `PendingOperation`, `AppRepository`)
-  - Deterministic ViewModel: `com.example.ui.AppViewModel` (Current Focus engine, Focus timer, Plan locking)
+  - API & Session: `com.aura.personalos.api.AuraApiService`, `com.aura.personalos.api.AuraApiClient`, `com.aura.personalos.auth.AuraSessionManager`
+  - Sync Layer: `com.aura.personalos.sync.AuraSyncManager`, `com.aura.personalos.sync.SyncWorker`
+  - Database & Entities: `com.aura.personalos.data.*` (`AppDatabase`, `Task`, `DailyPlan`, `DailyPlanItem`, `PendingOperation`, `AppRepository`)
+  - Deterministic ViewModel: `com.aura.personalos.ui.AppViewModel` (Current Focus engine, Focus timer, Plan locking)
   - Screens:
     - Screen 11 (Today): `MainAppContainer.kt` (Dynamic greeting, Plan Status Banner, Current Focus Card, Progress Ring)
     - Screen 12-16 (Planning): `TasksComponents.kt` (`PlanTomorrowScreen`, `UpcomingPlanScreen`, `LockTomorrowDialog`, Kanban & List)

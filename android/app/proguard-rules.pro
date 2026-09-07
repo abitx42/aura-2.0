@@ -26,8 +26,7 @@
 -keep @androidx.room.Dao interface *
 
 # Moshi - keep all model classes used for JSON
--keepclassmembers class com.sahil.auranotes.data.** { *; }
--keepclassmembers class com.example.data.** { *; }
+-keepclassmembers class com.aura.personalos.data.** { *; }
 -keep @com.squareup.moshi.JsonClass class *
 
 # Kotlin Coroutines
