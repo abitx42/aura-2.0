@@ -109,14 +109,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         // Schedule periodic background sync
         SyncWorker.schedulePeriodicSync(application)
 
-        // Focus Timer Ticker (ADR-012 Wall-Clock Anchored Telemetry)
+        // Focus Timer Ticker (ADR-012 Wall-Clock Anchored Telemetry with Monotonic Clock)
         viewModelScope.launch {
             while (true) {
                 kotlinx.coroutines.delay(500)
                 if (_isFocusTimerRunning.value) {
                     val startedAt = _focusSessionStartedAt.value
                     if (startedAt != null) {
-                        val wallElapsed = ((System.currentTimeMillis() - startedAt) / 1000L).toInt()
+                        val wallElapsed = ((android.os.SystemClock.elapsedRealtime() - startedAt) / 1000L).toInt()
                         val totalElapsed = _focusSessionAccumulatedSeconds.value + wallElapsed
                         val target = _focusSessionTargetSeconds.value
                         val remaining = (target - totalElapsed).coerceAtLeast(0)
@@ -935,6 +935,103 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // ==========================================
+    // NIGHT REVIEW 🌙 (ADR-013)
+    // Pure deterministic reflection, metrics & reconciliation
+    // ==========================================
+    val _isNightReviewVisible = MutableStateFlow(false)
+    val isNightReviewVisible: StateFlow<Boolean> = _isNightReviewVisible
+
+    val _nightReviewStep = MutableStateFlow(1) // 1: Reality, 2: Reconcile, 3: Reflect, 4: Summary
+    val nightReviewStep: StateFlow<Int> = _nightReviewStep
+
+    val _reviewSelectedMood = MutableStateFlow<Int?>(null)
+    val reviewSelectedMood: StateFlow<Int?> = _reviewSelectedMood
+
+    val _reviewImpactFactors = MutableStateFlow<Set<String>>(emptySet())
+    val reviewImpactFactors: StateFlow<Set<String>> = _reviewImpactFactors
+
+    val _reviewNotes = MutableStateFlow("")
+    val reviewNotes: StateFlow<String> = _reviewNotes
+
+    val _itemReconciliations = MutableStateFlow<Map<Int, Pair<String, String?>>>(emptyMap())
+    val itemReconciliations: StateFlow<Map<Int, Pair<String, String?>>> = _itemReconciliations
+
+    fun startNightReview() {
+        _nightReviewStep.value = 1
+        _reviewSelectedMood.value = null
+        _reviewImpactFactors.value = emptySet()
+        _reviewNotes.value = ""
+        // Pre-populate reconciliations: all incomplete items default to MOVE_TOMORROW
+        val currentTasks = allTasks.value.filter { it.date == todayString && !it.isDone && !it.isDeleted }
+        val initialMap = mutableMapOf<Int, Pair<String, String?>>()
+        for (t in currentTasks) {
+            initialMap[t.id] = Pair("MOVE_TOMORROW", null)
+        }
+        _itemReconciliations.value = initialMap
+        _isNightReviewVisible.value = true
+    }
+
+    fun dismissNightReview() {
+        _isNightReviewVisible.value = false
+    }
+
+    fun setNightReviewStep(step: Int) {
+        _nightReviewStep.value = step.coerceIn(1, 4)
+    }
+
+    fun setReviewMood(mood: Int?) {
+        _reviewSelectedMood.value = mood
+    }
+
+    fun toggleImpactFactor(factor: String) {
+        val current = _reviewImpactFactors.value
+        _reviewImpactFactors.value = if (current.contains(factor)) {
+            current - factor
+        } else {
+            current + factor
+        }
+    }
+
+    fun setReviewNotes(notes: String) {
+        _reviewNotes.value = notes
+    }
+
+    fun setTaskReconciliation(taskId: Int, action: String, reason: String? = null) {
+        val current = _itemReconciliations.value.toMutableMap()
+        val existingReason = current[taskId]?.second
+        current[taskId] = Pair(action, reason ?: existingReason)
+        _itemReconciliations.value = current
+    }
+
+    fun setTaskReconciliationReason(taskId: Int, reason: String?) {
+        val current = _itemReconciliations.value.toMutableMap()
+        val existingAction = current[taskId]?.first ?: "MOVE_TOMORROW"
+        current[taskId] = Pair(existingAction, reason)
+        _itemReconciliations.value = current
+    }
+
+    fun submitNightReview() {
+        viewModelScope.launch {
+            val recList = _itemReconciliations.value.map { (taskId, pair) ->
+                TaskReconciliation(
+                    taskId = taskId,
+                    action = pair.first,
+                    reason = pair.second
+                )
+            }
+            repository.completeNightReview(
+                planDate = todayString,
+                dayMood = _reviewSelectedMood.value,
+                impactFactors = _reviewImpactFactors.value.toList(),
+                notes = _reviewNotes.value.takeIf { it.isNotBlank() },
+                reconciliations = recList
+            )
+            _isNightReviewVisible.value = false
+            _currentSection.value = Section.Tasks
+        }
+    }
+
+    // ==========================================
     // DETERMINISTIC CURRENT FOCUS ENGINE v1 (ADR-007, ADR-011)
     // Invariant: Pure deterministic Room calculations, ZERO AI calls.
     // Hierarchy: Manual Active -> Within Scheduled Block -> Missed Scheduled Block -> Next Scheduled -> Locked Plan Sequence -> Empty
@@ -972,7 +1069,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val base = _focusSessionAccumulatedSeconds.value
         val start = _focusSessionStartedAt.value
         return if (_isFocusTimerRunning.value && start != null) {
-            base + ((System.currentTimeMillis() - start) / 1000L).toInt()
+            base + ((android.os.SystemClock.elapsedRealtime() - start) / 1000L).toInt()
         } else {
             base
         }
@@ -1198,7 +1295,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _activeTimerTaskId.value = task.id
         _focusSessionTargetSeconds.value = targetSec
         _focusSessionAccumulatedSeconds.value = 0
-        _focusSessionStartedAt.value = System.currentTimeMillis()
+        _focusSessionStartedAt.value = android.os.SystemClock.elapsedRealtime()
         _focusTimerSeconds.value = targetSec
         _timerSecondsLeft.value = targetSec
         _isFocusTimerRunning.value = true
@@ -1224,7 +1321,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             _activeTimerTaskId.value = taskId
             _focusSessionTargetSeconds.value = targetSec
             _focusSessionAccumulatedSeconds.value = 0
-            _focusSessionStartedAt.value = System.currentTimeMillis()
+            _focusSessionStartedAt.value = android.os.SystemClock.elapsedRealtime()
             _focusTimerSeconds.value = targetSec
             _timerSecondsLeft.value = targetSec
             _isFocusTimerRunning.value = true
@@ -1262,7 +1359,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun resumeFocusTimer() {
         if (_focusTimerSeconds.value > 0) {
-            _focusSessionStartedAt.value = System.currentTimeMillis()
+            _focusSessionStartedAt.value = android.os.SystemClock.elapsedRealtime()
             _isFocusTimerRunning.value = true
             _isTimerRunning.value = true
             val activeId = _activeFocusTaskId.value ?: _activeTimerTaskId.value

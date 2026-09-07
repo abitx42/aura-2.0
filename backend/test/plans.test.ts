@@ -102,6 +102,37 @@ export async function runPlansTests() {
   }
   console.log('✅ Test P8 Passed: Schema rejects negative actualDurationSeconds and invalid actualStart ISO strings');
 
+  // Test 9: Unauthenticated night review request rejected
+  const unauthReviewRes = await app.inject({
+    method: 'POST',
+    url: '/api/v1/daily-plans/33333333-3333-3333-3333-333333333333/review',
+    payload: { dayMood: 5 },
+  });
+  if (unauthReviewRes.statusCode !== 401) {
+    throw new Error(`Expected 401 for unauthenticated review request, got ${unauthReviewRes.statusCode}`);
+  }
+  console.log('✅ Test P9 Passed: Unauthenticated night review request rejected');
+
+  // Test 10: Invalid dayMood and uncompletedReason rejected by schema
+  const badReviewRes = await app.inject({
+    method: 'POST',
+    url: '/api/v1/daily-plans/33333333-3333-3333-3333-333333333333/review',
+    headers: { authorization: `Bearer ${token}` },
+    payload: {
+      dayMood: 10, // Invalid: must be 1 to 5
+      itemReconciliations: [
+        {
+          itemId: '55555555-5555-5555-5555-555555555555',
+          reconciliationAction: 'INVALID_ACTION',
+        },
+      ],
+    },
+  });
+  if (badReviewRes.statusCode !== 422) {
+    throw new Error(`Expected 422 for invalid review payload, got ${badReviewRes.statusCode}`);
+  }
+  console.log('✅ Test P10 Passed: Schema rejects invalid dayMood and reconciliationAction in review payload');
+
   await app.close();
   console.log('🎉 All Daily Plans tests completed successfully!');
 }

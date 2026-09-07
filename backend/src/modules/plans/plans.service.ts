@@ -325,5 +325,167 @@ export class PlansService {
       return updatedItemRes.rows[0];
     });
   }
+
+  static async reviewPlan(
+    userId: string,
+    planId: string,
+    data: {
+      dayMood?: number;
+      dayImpactFactors?: string[];
+      reviewNotes?: string;
+      itemReconciliations?: Array<{
+        itemId: string;
+        reconciliationAction: 'MOVE_TOMORROW' | 'RESCHEDULE' | 'CANCEL' | 'KEEP_OPEN';
+        uncompletedReason?: 'TIME_UNDER_ESTIMATED' | 'LOW_ENERGY' | 'UNEXPECTED_EVENT' | 'PROCRASTINATION' | 'PRIORITY_CHANGED' | 'NO_LONGER_RELEVANT' | 'OTHER';
+      }>;
+    }
+  ) {
+    return withTransaction(async (client) => {
+      // 1. Verify plan ownership
+      const planRes = await client.query(
+        `SELECT * FROM daily_plans WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL`,
+        [planId, userId]
+      );
+
+      if (planRes.rows.length === 0) {
+        throw new Error('PLAN_NOT_FOUND');
+      }
+
+      const plan = planRes.rows[0];
+
+      // 2. Fetch all items for this plan
+      const itemsRes = await client.query(
+        `SELECT * FROM daily_plan_items WHERE daily_plan_id = $1 ORDER BY sort_order ASC`,
+        [planId]
+      );
+
+      const items = itemsRes.rows;
+      const totalPlanned = items.length;
+      const completedCount = items.filter((i: any) => i.execution_state === 'COMPLETED' || i.status === 'DONE').length;
+      const actualFocusSeconds = items.reduce((acc: number, i: any) => acc + (i.actual_duration_seconds || 0), 0);
+      const plannedFocusSeconds = items.reduce((acc: number, i: any) => {
+        const mins = i.duration_minutes || 30;
+        return acc + mins * 60;
+      }, 0);
+
+      // 3. Process reconciliations if provided
+      if (data.itemReconciliations && data.itemReconciliations.length > 0) {
+        const planDateObj = new Date(plan.plan_date);
+        const tomorrowObj = new Date(planDateObj);
+        tomorrowObj.setDate(tomorrowObj.getDate() + 1);
+        const tomorrowStr = tomorrowObj.toISOString().split('T')[0];
+
+        for (const rec of data.itemReconciliations) {
+          const matchingItem = items.find((i: any) => i.id === rec.itemId);
+          if (matchingItem) {
+            await client.query(
+              `UPDATE daily_plan_items
+               SET uncompleted_reason = $1,
+                   reconciliation_action = $2,
+                   updated_at = NOW()
+               WHERE id = $3 AND daily_plan_id = $4`,
+              [rec.uncompletedReason ?? null, rec.reconciliationAction, rec.itemId, planId]
+            );
+
+            if (rec.reconciliationAction === 'MOVE_TOMORROW' && matchingItem.item_type === 'TASK' && matchingItem.reference_id) {
+              await client.query(
+                `UPDATE tasks
+                 SET date = $1,
+                     updated_at = NOW(),
+                     version = version + 1
+                 WHERE id = $2 AND user_id = $3`,
+                [tomorrowStr, matchingItem.reference_id, userId]
+              );
+            } else if (rec.reconciliationAction === 'CANCEL' && matchingItem.item_type === 'TASK' && matchingItem.reference_id) {
+              await client.query(
+                `UPDATE tasks
+                 SET status = 'CANCELLED',
+                     updated_at = NOW(),
+                     version = version + 1
+                 WHERE id = $1 AND user_id = $2`,
+                [matchingItem.reference_id, userId]
+              );
+            }
+          }
+        }
+      }
+
+      const uncompletedCount = Math.max(0, totalPlanned - completedCount);
+      const planAccuracy = totalPlanned > 0
+        ? Math.round((completedCount / totalPlanned) * 100)
+        : 100;
+
+      const impactFactorsStr = data.dayImpactFactors && data.dayImpactFactors.length > 0
+        ? data.dayImpactFactors.join(',')
+        : null;
+
+      // 4. Update daily plan status to REVIEWED
+      const updatedPlanRes = await client.query(
+        `UPDATE daily_plans
+         SET status = 'REVIEWED',
+             reviewed_at = NOW(),
+             day_mood = $1,
+             day_impact_factors = $2,
+             review_notes = $3,
+             plan_accuracy_percent = $4,
+             planned_focus_seconds = $5,
+             actual_focus_seconds = $6,
+             completed_tasks_count = $7,
+             uncompleted_tasks_count = $8,
+             updated_at = NOW(),
+             version = version + 1
+         WHERE id = $9
+         RETURNING *`,
+        [
+          data.dayMood ?? null,
+          impactFactorsStr,
+          data.reviewNotes ?? null,
+          planAccuracy,
+          plannedFocusSeconds,
+          actualFocusSeconds,
+          completedCount,
+          uncompletedCount,
+          planId,
+        ]
+      );
+
+      // 5. Emit canonical Life Event REVIEW_COMPLETED
+      await client.query(
+        `INSERT INTO life_events (user_id, domain, event_type, reference_table, reference_id, payload_json, occurred_at)
+         VALUES ($1, 'REFLECTION', 'REVIEW_COMPLETED', 'daily_plans', $2, $3, NOW())`,
+        [
+          userId,
+          planId,
+          JSON.stringify({
+            planId,
+            planDate: plan.plan_date,
+            planAccuracyPercent: planAccuracy,
+            completedCount,
+            uncompletedCount,
+            totalPlanned,
+            actualFocusSeconds,
+            plannedFocusSeconds,
+            dayMood: data.dayMood,
+          }),
+        ]
+      );
+
+      return {
+        ...updatedPlanRes.rows[0],
+        daySummary: {
+          planDate: plan.plan_date,
+          planAccuracyPercent: planAccuracy,
+          completedCount,
+          uncompletedCount,
+          totalPlanned,
+          actualFocusSeconds,
+          plannedFocusSeconds,
+          dayMood: data.dayMood,
+          dayImpactFactors: data.dayImpactFactors ?? [],
+          reviewNotes: data.reviewNotes ?? null,
+        },
+      };
+    });
+  }
 }
 

@@ -187,6 +187,14 @@ class AppRepository(val db: AppDatabase, val context: Context? = null) {
             put("status", plan.status)
             put("lockedAt", plan.lockedAt)
             put("lockReason", plan.lockReason)
+            put("reviewedAt", plan.reviewedAt)
+            put("dayMood", plan.dayMood)
+            put("dayImpactFactors", plan.dayImpactFactors)
+            put("planAccuracyPercent", plan.planAccuracyPercent)
+            put("plannedFocusSeconds", plan.plannedFocusSeconds)
+            put("actualFocusSeconds", plan.actualFocusSeconds)
+            put("completedTasksCount", plan.completedTasksCount)
+            put("uncompletedTasksCount", plan.uncompletedTasksCount)
             put("createdAt", plan.createdAt)
         }.toString()
     }
@@ -347,6 +355,115 @@ class AppRepository(val db: AppDatabase, val context: Context? = null) {
         actualDurationSeconds: Int = 0
     ) = withContext(Dispatchers.IO) {
         dailyPlanDao.updateItemExecutionByTask(taskId, planDate, state, actualDurationSeconds)
+    }
+
+    suspend fun completeNightReview(
+        planDate: String,
+        dayMood: Int?,
+        impactFactors: List<String>,
+        notes: String?,
+        reconciliations: List<TaskReconciliation>
+    ) = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        val planItems = dailyPlanDao.getPlanItemsForDateSync(planDate)
+
+        // Calculate tomorrow's date string (yyyy-MM-dd)
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val cal = Calendar.getInstance()
+        try {
+            sdf.parse(planDate)?.let { cal.time = it }
+        } catch (_: Exception) {}
+        cal.add(Calendar.DAY_OF_YEAR, 1)
+        val tomorrowDate = sdf.format(cal.time)
+
+        // Deterministic metrics calculation
+        val totalPlanned = planItems.size
+        var completedCount = 0
+        var plannedFocusSec = 0
+        var actualFocusSec = 0
+
+        for (item in planItems) {
+            plannedFocusSec += item.durationMinutes * 60
+            actualFocusSec += item.actualDurationSeconds
+            if (item.executionState == "COMPLETED") {
+                completedCount++
+            }
+        }
+        val uncompletedCount = (totalPlanned - completedCount).coerceAtLeast(0)
+        val planAccuracy = if (totalPlanned > 0) {
+            ((completedCount.toDouble() / totalPlanned.toDouble()) * 100).toInt()
+        } else {
+            100
+        }
+
+        // Apply task reconciliations
+        for (rec in reconciliations) {
+            dailyPlanDao.updateItemReconciliationByTask(rec.taskId, planDate, rec.reason, rec.action)
+            val task = taskDao.getTaskById(rec.taskId)
+            if (task != null) {
+                when (rec.action) {
+                    "MOVE_TOMORROW" -> {
+                        val updatedTask = task.copy(date = tomorrowDate, updatedAt = now)
+                        taskDao.updateTask(updatedTask)
+                        pendingDao.insert(PendingOperation(
+                            entityType = "TASK",
+                            operationType = "UPDATE",
+                            entitySyncId = updatedTask.syncId,
+                            payload = taskToJson(updatedTask)
+                        ))
+                    }
+                    "RESCHEDULE" -> {
+                        val updatedTask = task.copy(time = null, updatedAt = now)
+                        taskDao.updateTask(updatedTask)
+                        pendingDao.insert(PendingOperation(
+                            entityType = "TASK",
+                            operationType = "UPDATE",
+                            entitySyncId = updatedTask.syncId,
+                            payload = taskToJson(updatedTask)
+                        ))
+                    }
+                    "CANCEL" -> {
+                        val updatedTask = task.copy(isDeleted = true, updatedAt = now)
+                        taskDao.updateTask(updatedTask)
+                        pendingDao.insert(PendingOperation(
+                            entityType = "TASK",
+                            operationType = "DELETE",
+                            entitySyncId = updatedTask.syncId,
+                            payload = taskToJson(updatedTask)
+                        ))
+                    }
+                    "KEEP_OPEN" -> {
+                        // Task remains untouched on current date
+                    }
+                }
+            }
+        }
+
+        val factorsString = impactFactors.joinToString(",")
+
+        dailyPlanDao.savePlanReview(
+            date = planDate,
+            reviewedAt = now,
+            dayMood = dayMood,
+            impactFactors = factorsString,
+            notes = notes,
+            accuracy = planAccuracy,
+            plannedSec = plannedFocusSec,
+            actualSec = actualFocusSec,
+            completedCount = completedCount,
+            uncompletedCount = uncompletedCount
+        )
+
+        val updatedPlan = dailyPlanDao.getPlanForDateSync(planDate)
+        if (updatedPlan != null) {
+            pendingDao.insert(PendingOperation(
+                entityType = "PLAN",
+                operationType = "UPDATE",
+                entitySyncId = updatedPlan.syncId,
+                payload = planToJson(updatedPlan)
+            ))
+        }
+        triggerSync()
     }
 
     suspend fun startMyDay(date: String) = withContext(Dispatchers.IO) {
@@ -788,3 +905,9 @@ class AppRepository(val db: AppDatabase, val context: Context? = null) {
 }
 
 data class HabitStreak(val currentStreak: Int, val maxStreak: Int)
+
+data class TaskReconciliation(
+    val taskId: Int,
+    val action: String, // MOVE_TOMORROW, RESCHEDULE, CANCEL, KEEP_OPEN
+    val reason: String? = null // TIME_UNDER_ESTIMATED, LOW_ENERGY, UNEXPECTED_EVENT, PROCRASTINATION, PRIORITY_CHANGED, NO_LONGER_RELEVANT, OTHER
+)

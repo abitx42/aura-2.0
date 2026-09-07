@@ -177,5 +177,54 @@ export async function plansRoutes(app: FastifyInstance) {
       throw err;
     }
   });
+
+  const reviewPlanSchema = z.object({
+    dayMood: z.number().int().min(1).max(5).optional(),
+    dayImpactFactors: z.array(z.string()).optional(),
+    reviewNotes: z.string().optional(),
+    itemReconciliations: z.array(
+      z.object({
+        itemId: z.string().uuid(),
+        reconciliationAction: z.enum(['MOVE_TOMORROW', 'RESCHEDULE', 'CANCEL', 'KEEP_OPEN']),
+        uncompletedReason: z.enum([
+          'TIME_UNDER_ESTIMATED', 'LOW_ENERGY', 'UNEXPECTED_EVENT', 'PROCRASTINATION',
+          'PRIORITY_CHANGED', 'NO_LONGER_RELEVANT', 'OTHER'
+        ]).optional(),
+      })
+    ).optional(),
+  });
+
+  app.post('/:id/review', async (request, reply) => {
+    const user = (request as any).user;
+    const { id } = request.params as { id: string };
+    const parseResult = reviewPlanSchema.safeParse(request.body);
+    if (!parseResult.success) {
+      return reply.status(422).send({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid night review payload',
+          details: parseResult.error.issues,
+        },
+      });
+    }
+
+    try {
+      const reviewResult = await PlansService.reviewPlan(
+        user.userId,
+        id,
+        parseResult.data
+      );
+      return reply.send({ success: true, data: reviewResult });
+    } catch (err: any) {
+      if (err.message === 'PLAN_NOT_FOUND') {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'Plan not found' },
+        });
+      }
+      throw err;
+    }
+  });
 }
 

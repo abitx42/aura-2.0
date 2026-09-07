@@ -183,4 +183,35 @@
   - Consistent telemetry recorded in Room and PostgreSQL.
   - Seamless, distraction-free execution experience.
 
+---
+
+## ADR-013: Deterministic Night Review, Plan Accuracy & Non-Judgmental Truth Reconciliation
+
+- **Context**:
+  1. Without a formal closing ritual, daily productivity apps either let uncompleted tasks silently carry forward indefinitely (creating backlog debt and anxiety) or treat uncompleted items as failures (toxic productivity scoring).
+  2. The daily operating system loop requires a truth reconciliation layer where intention meets reality:
+     $$\text{Plan Tomorrow} \longrightarrow \text{Lock} \longrightarrow \text{Kickoff} \longrightarrow \text{Execute} \longrightarrow \mathbf{\text{Review}} \longrightarrow \text{Plan Better Tomorrow}$$
+  3. LLMs must never judge or hallucinate daily performance metrics. Any analysis of daily accuracy must be 100% deterministic (Invariant 2).
+  4. Monotonic clocks (`SystemClock.elapsedRealtime()`) provide drift-proof live session counting without being subject to device clock modifications, while UTC timestamps record historical audit logs.
+- **Decision**:
+  1. **Core Philosophy**: *"Night Review is where Aura compares intention with reality — not where it judges the user."*
+  2. **Deterministic Plan Accuracy**:
+     $$\text{Plan Accuracy} = \frac{\text{Completed Commitments}}{\text{Planned Commitments}} \times 100\%$$
+     Framed strictly as calibration feedback for planning capacity, never as a moral or productivity grade.
+  3. **Non-Judgmental Incomplete Task Reconciliation**:
+     Every incomplete planned item is actively reconciled via 4 non-punitive resolutions:
+     - `Move to Tomorrow`: Automatically queues task into tomorrow's draft plan.
+     - `Reschedule Later`: Leaves task in general backlog with cleared scheduled slot.
+     - `Skip / Archive`: Marks item skipped today without deleting task.
+     - `Keep for Today`: Retains task for evening overflow.
+     Optional non-judgmental reasons: `TIME_UNDER_ESTIMATED`, `LOW_ENERGY`, `UNEXPECTED_EVENT`, `PROCRASTINATION`, `PRIORITY_CHANGED`, `NO_LONGER_RELEVANT`, `OTHER`.
+  4. **Lightweight Reflection**:
+     Emoji feeling selector (`😫 😕 😐 🙂 🔥`), multi-select impact chips (`Low energy`, `Unexpected work`, `Procrastination`, `Social plans`, `Feeling sick`, `Poor planning`), and optional notes.
+  5. **Lifecycle Transition & Life Event**:
+     Transitions `daily_plans.status` from `ACTIVE` $\longrightarrow$ `REVIEWED`. Emits canonical life event `REVIEW_COMPLETED` (domain: `REFLECTION`) and bridges directly into tomorrow's plan.
+- **Consequences**:
+  - Closes the first complete daily loop in Aura 2.0.
+  - Generates structured, authentic historical datasets for future Insight Engine pattern discovery.
+  - Prevents stale task accumulation and planning anxiety.
+
 

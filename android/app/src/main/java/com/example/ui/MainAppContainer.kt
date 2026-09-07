@@ -103,14 +103,18 @@ fun MainAppContainer(
             var workspaceDrawingData by remember { mutableStateOf<String?>(null) }
             var isDrawingWorkspaceOpen by remember { mutableStateOf(false) }
 
+            val isNightReviewVisible by viewModel.isNightReviewVisible.collectAsState()
+
             // Systematic back button interception
             val isBackHandlingRequired = showOverlayMenu || showCustomIconDialog || showImageCaptureDialog || 
                 showAudioRecordDialog || showGlobalQuickTransactionType != null || 
                 isDrawingWorkspaceOpen || editNoteItem != null || editTaskItem != null || 
+                isNightReviewVisible ||
                 activeTab != Section.Dashboard
 
             BackHandler(enabled = isBackHandlingRequired) {
                 when {
+                    isNightReviewVisible -> viewModel.dismissNightReview()
                     showOverlayMenu -> showOverlayMenu = false
                     showCustomIconDialog -> showCustomIconDialog = false
                     showImageCaptureDialog -> showImageCaptureDialog = false
@@ -857,6 +861,14 @@ fun MainAppContainer(
                     FocusExecutionModal(
                         viewModel = viewModel,
                         onDismiss = { viewModel.dismissFocusOverlay() }
+                    )
+                }
+
+                // --- NIGHT REVIEW DIALOG BEGIN (ADR-013) ---
+                if (isNightReviewVisible) {
+                    NightReviewDialog(
+                        viewModel = viewModel,
+                        onDismiss = { viewModel.dismissNightReview() }
                     )
                 }
 
@@ -2255,6 +2267,7 @@ fun DashboardScreen(
     val isDashboardLoading by viewModel.isDashboardLoading.collectAsState()
 
     val userDisplayName by viewModel.userDisplayName.collectAsState()
+    val todayPlan by viewModel.todayPlan.collectAsState()
     val isTodayLocked by viewModel.isTodayLocked.collectAsState()
     val isTodayPlanAwaitingActivation by viewModel.isTodayPlanAwaitingActivation.collectAsState()
     val currentFocusTask by viewModel.currentFocusTask.collectAsState()
@@ -2461,6 +2474,144 @@ fun DashboardScreen(
                             ) {
                                 Text("Plan Day", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ==========================================
+        // NIGHT REVIEW BANNER (ADR-013)
+        // Active execution prompts review; Reviewed status shows summary & bridge CTA
+        // ==========================================
+        if (todayPlan?.status == "ACTIVE") {
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .auraSpringPress(
+                            cornerRadius = 18.dp,
+                            onClick = { viewModel.startNightReview() }
+                        )
+                        .border(1.5.dp, Color(0xFF6366F1).copy(alpha = 0.6f), RoundedCornerShape(18.dp)),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF6366F1).copy(alpha = 0.08f)),
+                    shape = RoundedCornerShape(18.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF6366F1).copy(alpha = 0.2f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("🌙", fontSize = 20.sp)
+                            }
+                            Column {
+                                Text(
+                                    text = "Evening Review 🌙",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = AuraTheme.colors.textPrimary
+                                )
+                                Text(
+                                    text = "Compare intention with reality & bridge to tomorrow",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = AuraTheme.colors.textSecondary,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                        Button(
+                            onClick = { viewModel.startNightReview() },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1)),
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            Text("REVIEW 🌙", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.White)
+                        }
+                    }
+                }
+            }
+        } else if (todayPlan?.status == "REVIEWED") {
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .auraSpringPress(
+                            cornerRadius = 18.dp,
+                            onClick = { viewModel.startNightReview() }
+                        )
+                        .border(1.dp, AuraTheme.colors.positiveGreen.copy(alpha = 0.5f), RoundedCornerShape(18.dp)),
+                    colors = CardDefaults.cardColors(containerColor = AuraTheme.colors.positiveGreen.copy(alpha = 0.08f)),
+                    shape = RoundedCornerShape(18.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(AuraTheme.colors.positiveGreen.copy(alpha = 0.2f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    when (todayPlan?.dayMood) {
+                                        1 -> "😫"
+                                        2 -> "😕"
+                                        3 -> "😐"
+                                        4 -> "🙂"
+                                        5 -> "🔥"
+                                        else -> "✨"
+                                    },
+                                    fontSize = 20.sp
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = "Day Reviewed ✨",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = AuraTheme.colors.textPrimary
+                                )
+                                Text(
+                                    text = "${todayPlan?.planAccuracyPercent ?: 0}% Accuracy • ${todayPlan?.completedTasksCount ?: 0} completed",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = AuraTheme.colors.textSecondary,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                        Button(
+                            onClick = { viewModel.navigateTo(Section.Tasks) },
+                            colors = ButtonDefaults.buttonColors(containerColor = AuraTheme.colors.accentBrand),
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            Text("PLAN TOMORROW 🔒", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.White)
                         }
                     }
                 }

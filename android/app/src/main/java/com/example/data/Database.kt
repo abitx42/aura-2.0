@@ -494,11 +494,20 @@ interface MoneyDao {
 data class DailyPlan(
     @PrimaryKey val id: String = java.util.UUID.randomUUID().toString(),
     val planDate: String, // YYYY-MM-DD
-    val status: String = "DRAFT", // DRAFT, LOCKED, MODIFIED, COMPLETED
+    val status: String = "DRAFT", // DRAFT, LOCKED, ACTIVE, REVIEWED, ARCHIVED
     val lockedAt: Long? = null,
     val lockReason: String? = null,
     val morningNotes: String? = null,
     val targetSleepTime: String? = null,
+    val reviewedAt: Long? = null,
+    val dayMood: Int? = null, // 1 to 5 (1=Awful, 2=Rough, 3=Neutral, 4=Good, 5=Phenomenal)
+    val dayImpactFactors: String = "", // comma separated tags
+    val reviewNotes: String? = null,
+    val planAccuracyPercent: Int? = null,
+    val plannedFocusSeconds: Int = 0,
+    val actualFocusSeconds: Int = 0,
+    val completedTasksCount: Int = 0,
+    val uncompletedTasksCount: Int = 0,
     val version: Int = 1,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
@@ -521,7 +530,9 @@ data class DailyPlanItem(
     val durationMinutes: Int = 30,
     val executionState: String = "NOT_STARTED", // NOT_STARTED, IN_PROGRESS, PAUSED, COMPLETED, SKIPPED
     val actualStartTimestamp: Long? = null,
-    val actualDurationSeconds: Int = 0
+    val actualDurationSeconds: Int = 0,
+    val uncompletedReason: String? = null,
+    val reconciliationAction: String? = null
 )
 
 @Dao
@@ -547,8 +558,39 @@ interface DailyPlanDao {
     @Query("UPDATE daily_plans SET status = :status, updatedAt = :updatedAt WHERE planDate = :date")
     suspend fun updatePlanStatus(date: String, status: String, updatedAt: Long = System.currentTimeMillis())
 
+    @Query("""
+        UPDATE daily_plans 
+        SET status = 'REVIEWED', 
+            reviewedAt = :reviewedAt, 
+            dayMood = :dayMood, 
+            dayImpactFactors = :impactFactors, 
+            reviewNotes = :notes, 
+            planAccuracyPercent = :accuracy, 
+            plannedFocusSeconds = :plannedSec, 
+            actualFocusSeconds = :actualSec, 
+            completedTasksCount = :completedCount, 
+            uncompletedTasksCount = :uncompletedCount, 
+            updatedAt = :reviewedAt 
+        WHERE planDate = :date
+    """)
+    suspend fun savePlanReview(
+        date: String,
+        reviewedAt: Long,
+        dayMood: Int?,
+        impactFactors: String,
+        notes: String?,
+        accuracy: Int,
+        plannedSec: Int,
+        actualSec: Int,
+        completedCount: Int,
+        uncompletedCount: Int
+    )
+
     @Query("SELECT * FROM daily_plan_items WHERE planDate = :date ORDER BY sortOrder ASC")
     fun getPlanItemsForDate(date: String): Flow<List<DailyPlanItem>>
+
+    @Query("SELECT * FROM daily_plan_items WHERE planDate = :date ORDER BY sortOrder ASC")
+    suspend fun getPlanItemsForDateSync(date: String): List<DailyPlanItem>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPlanItems(items: List<DailyPlanItem>)
@@ -561,6 +603,9 @@ interface DailyPlanDao {
 
     @Query("UPDATE daily_plan_items SET executionState = :state, actualDurationSeconds = :durationSec WHERE taskId = :taskId AND planDate = :date")
     suspend fun updateItemExecutionByTask(taskId: Int, date: String, state: String, durationSec: Int)
+
+    @Query("UPDATE daily_plan_items SET uncompletedReason = :reason, reconciliationAction = :action WHERE taskId = :taskId AND planDate = :date")
+    suspend fun updateItemReconciliationByTask(taskId: Int, date: String, reason: String?, action: String?)
 }
 
 // ==========================================
@@ -588,7 +633,7 @@ interface DailyPlanDao {
         DailyPlan::class,
         DailyPlanItem::class
     ],
-    version = 11,
+    version = 12,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

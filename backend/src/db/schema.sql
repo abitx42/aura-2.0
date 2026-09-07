@@ -119,6 +119,14 @@ create table daily_plans (
     check (planning_mode in ('MANUAL','AI_ASSISTED','MIXED')),
   locked_at timestamptz,
   reviewed_at timestamptz,
+  day_mood integer check (day_mood >= 1 and day_mood <= 5),
+  day_impact_factors text,
+  review_notes text,
+  plan_accuracy_percent integer check (plan_accuracy_percent >= 0 and plan_accuracy_percent <= 100),
+  planned_focus_seconds integer not null default 0,
+  actual_focus_seconds integer not null default 0,
+  completed_tasks_count integer not null default 0,
+  uncompleted_tasks_count integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   deleted_at timestamptz,
@@ -142,11 +150,21 @@ create table daily_plan_items (
   execution_state text not null default 'NOT_STARTED'
     check (execution_state in ('NOT_STARTED','IN_PROGRESS','PAUSED','COMPLETED','SKIPPED')),
   actual_duration_seconds integer not null default 0,
+  uncompleted_reason text
+    check (uncompleted_reason is null or uncompleted_reason in (
+      'TIME_UNDER_ESTIMATED', 'LOW_ENERGY', 'UNEXPECTED_EVENT', 'PROCRASTINATION',
+      'PRIORITY_CHANGED', 'NO_LONGER_RELEVANT', 'OTHER'
+    )),
+  reconciliation_action text
+    check (reconciliation_action is null or reconciliation_action in (
+      'MOVE_TOMORROW', 'RESCHEDULE', 'CANCEL', 'KEEP_OPEN'
+    )),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 create index idx_plan_items_plan on daily_plan_items (daily_plan_id);
 create index idx_plan_items_execution on daily_plan_items (daily_plan_id, execution_state);
+create index idx_daily_plans_accuracy on daily_plans (user_id, plan_accuracy_percent);
 
 -- ============================================================
 -- MONEY
