@@ -58,14 +58,20 @@ Before writing code or creating migrations, review the documentation in this ord
 
 1. [AGENTS.md](AGENTS.md) — Governance rules and invariants
 2. [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) — Product philosophy and scope
-3. [Product Requirements (PRD)](docs/product/PRD.md) — Detailed specifications
-4. [MVP Implementation Plan](docs/product/MVP_IMPLEMENTATION_PLAN.md) — Build milestones & order
-5. [System Architecture](docs/architecture/ARCHITECTURE.md) — Client & server layers
-6. [Engineering Rules](docs/architecture/RULES.md) — Non-negotiable boundaries
-7. [Database Design](docs/architecture/DATABASE.md) — Schemas, indexes & constraints
-8. [Offline Sync Architecture](docs/architecture/SYNC_ARCHITECTURE.md) — Replication & conflict resolution
-9. [Screen Specifications](docs/ui/SCREEN_SPECIFICATIONS.md) — 21 MVP screen blueprints
-10. [UI/UX Design System](docs/ui/UI_UX_DESIGN.md) — Colors, typography, tokens & motion
+3. [Architecture Decisions (ADRs)](docs/architecture/DECISIONS.md) — Rationale and tradeoffs
+4. [Product Requirements (PRD)](docs/product/PRD.md) — Detailed specifications
+5. [MVP Implementation Plan](docs/product/MVP_IMPLEMENTATION_PLAN.md) — Build milestones & order
+6. [System Architecture](docs/architecture/ARCHITECTURE.md) — Client & server layers
+7. [Engineering Rules](docs/architecture/RULES.md) — Non-negotiable boundaries
+8. [Database Design](docs/architecture/DATABASE.md) — Schemas, indexes & constraints
+9. [Offline Sync Architecture](docs/architecture/SYNC_ARCHITECTURE.md) — Replication & conflict resolution
+10. [Event System](docs/architecture/EVENT_SYSTEM.md) — Unified life events bus
+11. [Error Handling](docs/architecture/ERROR_HANDLING.md) — Resilience & boundary handling
+12. [Security & Privacy](docs/architecture/SECURITY_PRIVACY.md) — Privacy boundaries & data rights
+13. [API Contracts](docs/backend/API_CONTRACTS.md) — Endpoints, payloads & schemas
+14. [Screen Specifications](docs/ui/SCREEN_SPECIFICATIONS.md) — 21 MVP screen blueprints
+15. [UI/UX Design System](docs/ui/UI_UX_DESIGN.md) — Colors, typography, tokens & motion
+16. [Testing Strategy](docs/engineering/TESTING_STRATEGY.md) — Unit, integration, and AI safety tests
 
 ---
 
@@ -78,11 +84,13 @@ Before writing code or creating migrations, review the documentation in this ord
 ├── README.md                  # Main repository overview
 │
 ├── docs/
-│   ├── product/               # PRD, MVP Plan, Roadmap
-│   ├── architecture/          # Architecture, Rules, Database, Sync
-│   ├── ai/                    # Context, Insight, Accountability & Action engines
+│   ├── product/               # PRD, MVP Plan, Roadmap, Metrics
+│   ├── architecture/          # Architecture, Database, Sync, ADRs, Events, Errors, Security
+│   ├── ai/                    # Context, Insight, Accountability, Memory, Actions, Model Strategy
 │   ├── ui/                    # UI/UX design, Screen specs, Component system
 │   ├── domains/               # Food, Finance, Phone Awareness, Capture
+│   ├── backend/               # API Contracts
+│   ├── engineering/           # Testing strategy & QA
 │   └── status/                # Current implementation state
 │
 ├── android/                   # Kotlin + Jetpack Compose Android app
@@ -98,7 +106,7 @@ Before writing code or creating migrations, review the documentation in this ord
 | **Mobile Client** | Kotlin, Jetpack Compose, Material 3, Room, WorkManager, Hilt, Navigation Compose |
 | **Backend API** | Node.js, Fastify, TypeScript, Zod |
 | **Persistence** | PostgreSQL (Cloud Source of Truth), Room (Local Offline Replica) |
-| **AI Layer** | Structured Outputs Gateway, Deterministic Context Retrieval |
+| **AI Layer** | Structured Outputs Gateway, Multi-tier routing (Groq, Llama, Gemini Flash) |
 
 ---
 

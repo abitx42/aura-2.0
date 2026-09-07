@@ -21,14 +21,21 @@ Before proposing or making any non-trivial changes, read these canonical files i
 ```text
 1. PROJECT_CONTEXT.md              # High-level vision, core daily loop, and boundaries
 2. AGENTS.md                       # This governance document
-3. docs/product/PRD.md             # Complete product requirements & user personas
-4. docs/product/MVP_IMPLEMENTATION_PLAN.md # Exact build order & vertical slice scope
-5. docs/architecture/ARCHITECTURE.md # System layers: Android, Fastify, PostgreSQL
-6. docs/architecture/RULES.md      # Invariant product and engineering rules
-7. docs/architecture/DATABASE.md   # PostgreSQL & Room schemas
-8. docs/architecture/SYNC_ARCHITECTURE.md # Offline-first sync protocol
-9. Relevant Engine / Domain docs   # CONTEXT_ENGINE, INSIGHT_ENGINE, etc.
-10. docs/ui/SCREEN_SPECIFICATIONS.md # Specific screen layout, states, and logic
+3. docs/architecture/DECISIONS.md  # Architectural Decision Records (ADRs) & Tradeoffs
+4. docs/product/PRD.md             # Complete product requirements & user personas
+5. docs/product/MVP_IMPLEMENTATION_PLAN.md # Exact build order & vertical slice scope
+6. docs/architecture/ARCHITECTURE.md # System layers: Android, Fastify, PostgreSQL
+7. docs/architecture/RULES.md      # Invariant product and engineering rules
+8. docs/architecture/DATABASE.md   # PostgreSQL & Room schemas
+9. docs/architecture/SYNC_ARCHITECTURE.md # Offline-first sync protocol
+10. docs/architecture/EVENT_SYSTEM.md # Canonical Life Event index and bus
+11. docs/architecture/ERROR_HANDLING.md # System resilience & failure recovery
+12. docs/architecture/SECURITY_PRIVACY.md # Privacy boundaries & memory sovereignty
+13. docs/backend/API_CONTRACTS.md  # REST endpoints, payloads, and error codes
+14. Relevant Engine docs           # CONTEXT_ENGINE, INSIGHT_ENGINE, ACCOUNTABILITY
+15. docs/ui/SCREEN_SPECIFICATIONS.md # Specific screen layout, states, and logic
+16. docs/ui/UI_UX_DESIGN.md        # Design system, tokens, colors, and motion
+17. docs/engineering/TESTING_STRATEGY.md # Test pyramid & AI regression tests
 ```
 
 ---
@@ -39,7 +46,7 @@ Every AI agent must honor these five non-negotiable rules:
 
 ### 1. AI Never Mutates User Domain Data Directly
 - AI output can only produce a `ProposedAction` stored in the `proposed_actions` table.
-- Lifecycle: `PROPOSED` $\to$ `APPROVED` (by user) $\to$ `EXECUTED` (by deterministic backend executor).
+- Lifecycle: `PROPOSED` $\longrightarrow$ `APPROVED` (by user) $\longrightarrow$ `EXECUTED` (by deterministic backend executor).
 - AI never directly writes to `tasks`, `daily_plans`, `transactions`, `food_logs`, or `health_metrics`.
 
 ### 2. Deterministic SQL/Room for Calculations
@@ -53,7 +60,7 @@ Every AI agent must honor these five non-negotiable rules:
 - Respect data quality gates (e.g. minimum 14 days of sleep/task data before surfacing sleep insights).
 
 ### 4. Offline-First Resilience
-- Flow: `User Action` $\to$ `Room (Local Write)` $\to$ `Immediate UI Update` $\to$ `Sync Queue` $\to$ `Fastify Backend (PostgreSQL)`.
+- Flow: `User Action` $\longrightarrow$ `Room (Local Write)` $\longrightarrow$ `Immediate UI Update` $\longrightarrow$ `Sync Queue` $\longrightarrow$ `Fastify Backend (PostgreSQL)`.
 - Core features (creating tasks, completing tasks, locking tomorrow's plan) must function 100% offline.
 - A network error must never discard user work.
 
