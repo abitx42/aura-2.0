@@ -231,4 +231,99 @@ export class PlansService {
       return updatedPlanRes.rows[0];
     });
   }
+
+  static async updateItemExecution(
+    userId: string,
+    planId: string,
+    itemId: string,
+    data: {
+      executionState: 'NOT_STARTED' | 'IN_PROGRESS' | 'PAUSED' | 'COMPLETED' | 'SKIPPED';
+      actualStart?: string;
+      actualDurationSeconds?: number;
+    }
+  ) {
+    return withTransaction(async (client) => {
+      // 1. Verify plan ownership
+      const planRes = await client.query(
+        `SELECT * FROM daily_plans WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL`,
+        [planId, userId]
+      );
+
+      if (planRes.rows.length === 0) {
+        throw new Error('PLAN_NOT_FOUND');
+      }
+
+      // 2. Verify item exists on this plan
+      const itemRes = await client.query(
+        `SELECT * FROM daily_plan_items WHERE id = $1 AND daily_plan_id = $2`,
+        [itemId, planId]
+      );
+
+      if (itemRes.rows.length === 0) {
+        throw new Error('ITEM_NOT_FOUND');
+      }
+
+      const item = itemRes.rows[0];
+      const actualDuration = data.actualDurationSeconds ?? item.actual_duration_seconds;
+      const actualStart = data.actualStart ? new Date(data.actualStart) : item.actual_start;
+      const actualEnd =
+        data.executionState === 'COMPLETED' || data.executionState === 'SKIPPED'
+          ? new Date()
+          : item.actual_end;
+      const itemStatus =
+        data.executionState === 'COMPLETED'
+          ? 'DONE'
+          : data.executionState === 'SKIPPED'
+          ? 'SKIPPED'
+          : data.executionState === 'IN_PROGRESS'
+          ? 'IN_PROGRESS'
+          : 'PLANNED';
+
+      const updatedItemRes = await client.query(
+        `UPDATE daily_plan_items
+         SET execution_state = $1,
+             actual_start = COALESCE($2, actual_start),
+             actual_end = COALESCE($3, actual_end),
+             actual_duration_seconds = $4,
+             status = $5,
+             updated_at = NOW()
+         WHERE id = $6 AND daily_plan_id = $7
+         RETURNING *`,
+        [data.executionState, actualStart, actualEnd, actualDuration, itemStatus, itemId, planId]
+      );
+
+      // 3. Deterministically update task if reference is a task and completed
+      if (data.executionState === 'COMPLETED' && item.item_type === 'TASK' && item.reference_id) {
+        await client.query(
+          `UPDATE tasks
+           SET status = 'COMPLETED',
+               completed_at = NOW(),
+               updated_at = NOW(),
+               version = version + 1
+           WHERE id = $1 AND user_id = $2`,
+          [item.reference_id, userId]
+        );
+      }
+
+      // 4. Emit Life Event
+      await client.query(
+        `INSERT INTO life_events (user_id, domain, event_type, reference_table, reference_id, payload_json, occurred_at)
+         VALUES ($1, 'EXECUTION', 'TASK_EXECUTED', 'daily_plan_items', $2, $3, NOW())`,
+        [
+          userId,
+          itemId,
+          JSON.stringify({
+            planId,
+            itemId,
+            referenceId: item.reference_id,
+            executionState: data.executionState,
+            actualDurationSeconds: actualDuration,
+          }),
+        ]
+      );
+
+      return updatedItemRes.rows[0];
+    });
+  }
 }
+

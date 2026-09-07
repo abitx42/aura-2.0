@@ -131,4 +131,51 @@ export async function plansRoutes(app: FastifyInstance) {
       throw err;
     }
   });
+
+  const updateItemExecutionSchema = z.object({
+    executionState: z.enum(['NOT_STARTED', 'IN_PROGRESS', 'PAUSED', 'COMPLETED', 'SKIPPED']),
+    actualStart: z.string().datetime().optional(),
+    actualDurationSeconds: z.number().int().nonnegative().optional(),
+  });
+
+  app.post('/:id/items/:itemId/execution', async (request, reply) => {
+    const user = (request as any).user;
+    const { id, itemId } = request.params as { id: string; itemId: string };
+    const parseResult = updateItemExecutionSchema.safeParse(request.body);
+    if (!parseResult.success) {
+      return reply.status(422).send({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid execution payload',
+          details: parseResult.error.issues,
+        },
+      });
+    }
+
+    try {
+      const updatedItem = await PlansService.updateItemExecution(
+        user.userId,
+        id,
+        itemId,
+        parseResult.data
+      );
+      return reply.send({ success: true, data: updatedItem });
+    } catch (err: any) {
+      if (err.message === 'PLAN_NOT_FOUND') {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'Plan not found' },
+        });
+      }
+      if (err.message === 'ITEM_NOT_FOUND') {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'Plan item not found' },
+        });
+      }
+      throw err;
+    }
+  });
 }
+

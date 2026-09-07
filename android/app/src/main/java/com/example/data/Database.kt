@@ -518,7 +518,10 @@ data class DailyPlanItem(
     val taskSyncId: String = "",
     val sortOrder: Int = 0,
     val scheduledStart: String? = null,
-    val durationMinutes: Int = 30
+    val durationMinutes: Int = 30,
+    val executionState: String = "NOT_STARTED", // NOT_STARTED, IN_PROGRESS, PAUSED, COMPLETED, SKIPPED
+    val actualStartTimestamp: Long? = null,
+    val actualDurationSeconds: Int = 0
 )
 
 @Dao
@@ -552,6 +555,12 @@ interface DailyPlanDao {
 
     @Query("DELETE FROM daily_plan_items WHERE planDate = :date")
     suspend fun deletePlanItemsForDate(date: String)
+
+    @Query("UPDATE daily_plan_items SET executionState = :state, actualStartTimestamp = :actualStart, actualDurationSeconds = :durationSec WHERE id = :itemId")
+    suspend fun updateItemExecution(itemId: String, state: String, actualStart: Long?, durationSec: Int)
+
+    @Query("UPDATE daily_plan_items SET executionState = :state, actualDurationSeconds = :durationSec WHERE taskId = :taskId AND planDate = :date")
+    suspend fun updateItemExecutionByTask(taskId: Int, date: String, state: String, durationSec: Int)
 }
 
 // ==========================================
@@ -579,7 +588,7 @@ interface DailyPlanDao {
         DailyPlan::class,
         DailyPlanItem::class
     ],
-    version = 10,
+    version = 11,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

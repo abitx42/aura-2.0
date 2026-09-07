@@ -138,10 +138,15 @@ create table daily_plan_items (
   actual_end timestamptz,
   status text not null default 'PLANNED'
     check (status in ('PLANNED','IN_PROGRESS','DONE','SKIPPED')),
+  sort_order integer not null default 0,
+  execution_state text not null default 'NOT_STARTED'
+    check (execution_state in ('NOT_STARTED','IN_PROGRESS','PAUSED','COMPLETED','SKIPPED')),
+  actual_duration_seconds integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 create index idx_plan_items_plan on daily_plan_items (daily_plan_id);
+create index idx_plan_items_execution on daily_plan_items (daily_plan_id, execution_state);
 
 -- ============================================================
 -- MONEY

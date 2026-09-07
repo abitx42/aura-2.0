@@ -331,6 +331,28 @@ class AppRepository(val db: AppDatabase, val context: Context? = null) {
         }
     }
 
+    suspend fun updatePlanItemExecution(
+        itemId: String,
+        state: String,
+        actualStart: Long? = null,
+        actualDurationSeconds: Int = 0
+    ) = withContext(Dispatchers.IO) {
+        dailyPlanDao.updateItemExecution(itemId, state, actualStart, actualDurationSeconds)
+    }
+
+    suspend fun updatePlanItemExecutionByTask(
+        taskId: Int,
+        planDate: String,
+        state: String,
+        actualDurationSeconds: Int = 0
+    ) = withContext(Dispatchers.IO) {
+        dailyPlanDao.updateItemExecutionByTask(taskId, planDate, state, actualDurationSeconds)
+    }
+
+    suspend fun startMyDay(date: String) = withContext(Dispatchers.IO) {
+        activateDailyPlan(date)
+    }
+
     suspend fun addSubtask(subtask: Subtask) = withContext(Dispatchers.IO) {
         taskDao.insertSubtask(subtask)
     }

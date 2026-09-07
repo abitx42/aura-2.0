@@ -840,6 +840,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         .map { it?.status == "LOCKED" || it?.status == "ACTIVE" || it?.status == "MODIFIED" }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    val isTodayPlanAwaitingActivation: StateFlow<Boolean> = todayPlan
+        .map { it?.status == "LOCKED" }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     val isTomorrowLocked: StateFlow<Boolean> = tomorrowPlan
         .map { it?.status == "LOCKED" || it?.status == "MODIFIED" }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
@@ -919,8 +923,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // ==========================================
-    // DETERMINISTIC CURRENT FOCUS ENGINE
-    // Invariant: Manual Active -> Locked Plan Sequence -> Scheduled Time -> Critical -> Planned
+    // DETERMINISTIC CURRENT FOCUS ENGINE v1 (ADR-007, ADR-011)
+    // Invariant: Pure deterministic Room calculations, ZERO AI calls.
+    // Hierarchy: Manual Active -> Within Scheduled Block -> Missed Scheduled Block -> Next Scheduled -> Locked Plan Sequence -> Empty
     // ==========================================
     private val _activeFocusTaskId = MutableStateFlow<Int?>(null)
     val activeFocusTaskId: StateFlow<Int?> = _activeFocusTaskId
@@ -931,65 +936,255 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val _focusTimerSeconds = MutableStateFlow(25 * 60)
     val focusTimerSeconds: StateFlow<Int> = _focusTimerSeconds
 
-    val currentFocusTask: StateFlow<Task?> = combine(
+    private val _dismissedMissedTaskIds = MutableStateFlow<Set<Int>>(emptySet())
+
+    data class FocusEngineEvaluation(
+        val currentFocusTask: Task? = null,
+        val currentFocusPlanItem: DailyPlanItem? = null,
+        val isCurrentFocusMissed: Boolean = false,
+        val nextUpTask: Task? = null
+    )
+
+    private fun parseTimeToMinutes(timeStr: String?): Int? {
+        if (timeStr.isNullOrBlank()) return null
+        return try {
+            val parts = timeStr.trim().split(":")
+            if (parts.size >= 2) {
+                val hour = parts[0].trim().toIntOrNull() ?: return null
+                val min = parts[1].trim().take(2).toIntOrNull() ?: 0
+                hour * 60 + min
+            } else null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    val focusEvaluation: StateFlow<FocusEngineEvaluation> = combine(
         allTasks,
         todayPlan,
         todayPlanItems,
-        _activeFocusTaskId
-    ) { tasks, plan, planItems, manualFocusId ->
+        _activeFocusTaskId,
+        _dismissedMissedTaskIds
+    ) { tasks, plan, planItems, manualFocusId, dismissedMissedIds ->
         val todayTasks = tasks.filter { it.date == todayString && !it.isCompleted }
-        if (todayTasks.isEmpty()) return@combine null
-
-        // 1. Manually started focus session
-        if (manualFocusId != null) {
-            val active = todayTasks.find { it.id == manualFocusId }
-            if (active != null) return@combine active
+        if (todayTasks.isEmpty()) {
+            return@combine FocusEngineEvaluation()
         }
 
-        // 2. Locked Daily Plan Discipline: if today's plan is locked, follow the locked order!
-        if (plan?.status == "LOCKED" && planItems.isNotEmpty()) {
-            val sortedItems = planItems.sortedBy { it.sortOrder }
-            for (item in sortedItems) {
-                val candidate = todayTasks.find { 
-                    it.id == item.taskId || (it.syncId.isNotBlank() && it.syncId == item.taskSyncId) 
-                }
-                if (candidate != null && !candidate.isCompleted) {
-                    return@combine candidate
+        val nowCal = Calendar.getInstance()
+        val nowMinutes = nowCal.get(Calendar.HOUR_OF_DAY) * 60 + nowCal.get(Calendar.MINUTE)
+
+        fun findPlanItem(t: Task): DailyPlanItem? {
+            return planItems.find { it.taskId == t.id || (t.syncId.isNotBlank() && it.taskSyncId == t.syncId) }
+        }
+
+        var selectedTask: Task? = null
+        var selectedItem: DailyPlanItem? = null
+        var isMissed = false
+
+        // 1. MANUALLY ACTIVE TASK
+        if (manualFocusId != null) {
+            val active = todayTasks.find { it.id == manualFocusId }
+            if (active != null) {
+                selectedTask = active
+                selectedItem = findPlanItem(active)
+            }
+        }
+
+        // 2. TASK CURRENTLY INSIDE ITS SCHEDULED TIME BLOCK
+        if (selectedTask == null) {
+            for (t in todayTasks) {
+                val item = findPlanItem(t)
+                if (item?.executionState == "SKIPPED") continue
+                val startMin = parseTimeToMinutes(item?.scheduledStart ?: t.time) ?: continue
+                val duration = item?.durationMinutes ?: 30
+                val endMin = startMin + duration
+                if (startMin <= nowMinutes && nowMinutes < endMin) {
+                    selectedTask = t
+                    selectedItem = item
+                    break
                 }
             }
         }
 
-        // 3. Fallback: Task matching current hour
-        val currentHourStr = SimpleDateFormat("HH", Locale.US).format(Date())
-        val matchingHourTask = todayTasks.find { task ->
-            task.time?.startsWith(currentHourStr) == true
-        }
-        if (matchingHourTask != null) return@combine matchingHourTask
+        // 3. MISSED / OVERDUE CURRENT PLAN ITEM (Block has passed, not yet completed)
+        if (selectedTask == null) {
+            val missedCandidates = todayTasks.filter { t ->
+                if (dismissedMissedIds.contains(t.id)) return@filter false
+                val item = findPlanItem(t)
+                if (item?.executionState == "SKIPPED") return@filter false
+                val startMin = parseTimeToMinutes(item?.scheduledStart ?: t.time) ?: return@filter false
+                val duration = item?.durationMinutes ?: 30
+                val endMin = startMin + duration
+                nowMinutes >= endMin
+            }.sortedBy { t ->
+                val item = findPlanItem(t)
+                parseTimeToMinutes(item?.scheduledStart ?: t.time) ?: 0
+            }
 
-        // 4. Next Critical / Urgent task
-        val urgentTask = todayTasks.find {
-            it.priority.equals("Urgent", ignoreCase = true) || it.priority.equals("Critical", ignoreCase = true)
+            if (missedCandidates.isNotEmpty()) {
+                val missed = missedCandidates.first()
+                selectedTask = missed
+                selectedItem = findPlanItem(missed)
+                isMissed = true
+            }
         }
-        if (urgentTask != null) return@combine urgentTask
 
-        // 5. Next High priority task
-        val highTask = todayTasks.find {
-            it.priority.equals("High", ignoreCase = true) || it.priority.equals("Important", ignoreCase = true)
+        // 4. NEXT SCHEDULED INCOMPLETE TASK TODAY
+        if (selectedTask == null) {
+            val upcomingCandidates = todayTasks.filter { t ->
+                val item = findPlanItem(t)
+                if (item?.executionState == "SKIPPED") return@filter false
+                val startMin = parseTimeToMinutes(item?.scheduledStart ?: t.time) ?: return@filter false
+                startMin > nowMinutes
+            }.sortedBy { t ->
+                val item = findPlanItem(t)
+                parseTimeToMinutes(item?.scheduledStart ?: t.time) ?: 0
+            }
+
+            if (upcomingCandidates.isNotEmpty()) {
+                val upcoming = upcomingCandidates.first()
+                selectedTask = upcoming
+                selectedItem = findPlanItem(upcoming)
+            }
         }
-        if (highTask != null) return@combine highTask
 
-        // 6. Next planned task
-        todayTasks.firstOrNull()
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+        // 5. HIGHEST-PRIORITY PLANNED TASK (by locked plan sequence, or priority fallback)
+        if (selectedTask == null) {
+            if (planItems.isNotEmpty()) {
+                val sortedItems = planItems.sortedBy { it.sortOrder }
+                for (item in sortedItems) {
+                    if (item.executionState == "SKIPPED") continue
+                    val cand = todayTasks.find { it.id == item.taskId || (it.syncId.isNotBlank() && it.syncId == item.taskSyncId) }
+                    if (cand != null) {
+                        selectedTask = cand
+                        selectedItem = item
+                        break
+                    }
+                }
+            }
+        }
+
+        // Priority Fallback
+        if (selectedTask == null) {
+            val urgent = todayTasks.find { it.priority.equals("Urgent", true) || it.priority.equals("Critical", true) }
+            val high = todayTasks.find { it.priority.equals("High", true) || it.priority.equals("Important", true) }
+            val fallback = urgent ?: high ?: todayTasks.firstOrNull()
+            if (fallback != null) {
+                selectedTask = fallback
+                selectedItem = findPlanItem(fallback)
+            }
+        }
+
+        // DETERMINE NEXT UP TASK
+        var nextUp: Task? = null
+        if (selectedTask != null) {
+            val remainingTasks = todayTasks.filter { it.id != selectedTask.id }
+            if (remainingTasks.isNotEmpty()) {
+                if (planItems.isNotEmpty()) {
+                    val sortedItems = planItems.sortedBy { it.sortOrder }
+                    for (item in sortedItems) {
+                        if (item.executionState == "SKIPPED") continue
+                        val cand = remainingTasks.find { it.id == item.taskId || (it.syncId.isNotBlank() && it.syncId == item.taskSyncId) }
+                        if (cand != null) {
+                            nextUp = cand
+                            break
+                        }
+                    }
+                }
+                if (nextUp == null) {
+                    val upcoming = remainingTasks.filter { t ->
+                        val item = findPlanItem(t)
+                        if (item?.executionState == "SKIPPED") return@filter false
+                        val startMin = parseTimeToMinutes(item?.scheduledStart ?: t.time) ?: return@filter false
+                        startMin > nowMinutes
+                    }.minByOrNull { t ->
+                        val item = findPlanItem(t)
+                        parseTimeToMinutes(item?.scheduledStart ?: t.time) ?: 0
+                    }
+                    nextUp = upcoming ?: remainingTasks.find {
+                        it.priority.equals("Urgent", true) || it.priority.equals("Critical", true)
+                    } ?: remainingTasks.find {
+                        it.priority.equals("High", true) || it.priority.equals("Important", true)
+                    } ?: remainingTasks.firstOrNull()
+                }
+            }
+        }
+
+        FocusEngineEvaluation(
+            currentFocusTask = selectedTask,
+            currentFocusPlanItem = selectedItem,
+            isCurrentFocusMissed = isMissed,
+            nextUpTask = nextUp
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FocusEngineEvaluation())
+
+    val currentFocusTask: StateFlow<Task?> = focusEvaluation
+        .map { it.currentFocusTask }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val currentFocusPlanItem: StateFlow<DailyPlanItem?> = focusEvaluation
+        .map { it.currentFocusPlanItem }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val isCurrentFocusMissed: StateFlow<Boolean> = focusEvaluation
+        .map { it.isCurrentFocusMissed }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val nextUpTask: StateFlow<Task?> = focusEvaluation
+        .map { it.nextUpTask }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     fun startFocus(task: Task) {
         _activeFocusTaskId.value = task.id
         _focusTimerSeconds.value = 25 * 60
         _isFocusTimerRunning.value = true
+        viewModelScope.launch {
+            repository.updatePlanItemExecutionByTask(
+                taskId = task.id,
+                planDate = todayString,
+                state = "IN_PROGRESS",
+                actualDurationSeconds = 0
+            )
+        }
+    }
+
+    fun pauseFocusTimer() {
+        _isFocusTimerRunning.value = false
+        val activeId = _activeFocusTaskId.value
+        if (activeId != null) {
+            val elapsed = (25 * 60) - _focusTimerSeconds.value
+            viewModelScope.launch {
+                repository.updatePlanItemExecutionByTask(
+                    taskId = activeId,
+                    planDate = todayString,
+                    state = "PAUSED",
+                    actualDurationSeconds = elapsed
+                )
+            }
+        }
+    }
+
+    fun resumeFocusTimer() {
+        _isFocusTimerRunning.value = true
+        val activeId = _activeFocusTaskId.value
+        if (activeId != null) {
+            viewModelScope.launch {
+                repository.updatePlanItemExecutionByTask(
+                    taskId = activeId,
+                    planDate = todayString,
+                    state = "IN_PROGRESS"
+                )
+            }
+        }
     }
 
     fun toggleFocusTimer() {
-        _isFocusTimerRunning.value = !_isFocusTimerRunning.value
+        if (_isFocusTimerRunning.value) {
+            pauseFocusTimer()
+        } else {
+            resumeFocusTimer()
+        }
     }
 
     fun resetFocusTimer() {
@@ -998,10 +1193,72 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun completeCurrentFocus(task: Task) {
+        val elapsed = (25 * 60) - _focusTimerSeconds.value
         toggleTaskCompleted(task)
         _isFocusTimerRunning.value = false
         if (_activeFocusTaskId.value == task.id) {
             _activeFocusTaskId.value = null
+        }
+        viewModelScope.launch {
+            repository.updatePlanItemExecutionByTask(
+                taskId = task.id,
+                planDate = todayString,
+                state = "COMPLETED",
+                actualDurationSeconds = if (elapsed > 0) elapsed else 25 * 60
+            )
+        }
+    }
+
+    fun skipCurrentFocus(task: Task) {
+        val elapsed = (25 * 60) - _focusTimerSeconds.value
+        _isFocusTimerRunning.value = false
+        if (_activeFocusTaskId.value == task.id) {
+            _activeFocusTaskId.value = null
+        }
+        viewModelScope.launch {
+            repository.updatePlanItemExecutionByTask(
+                taskId = task.id,
+                planDate = todayString,
+                state = "SKIPPED",
+                actualDurationSeconds = elapsed
+            )
+        }
+    }
+
+    // 4 Actions for Missed Block Reconciliation
+    fun continueMissedTask(task: Task) {
+        _dismissedMissedTaskIds.value = _dismissedMissedTaskIds.value + task.id
+        startFocus(task)
+    }
+
+    fun moveMissedTaskLater(task: Task) {
+        _dismissedMissedTaskIds.value = _dismissedMissedTaskIds.value + task.id
+        val nowCal = Calendar.getInstance()
+        nowCal.add(Calendar.HOUR_OF_DAY, 1)
+        val newTime = SimpleDateFormat("HH:00", Locale.US).format(nowCal.time)
+        viewModelScope.launch {
+            val updated = task.copy(time = newTime)
+            repository.updateTask(updated)
+            if (_activeFocusTaskId.value == task.id) {
+                _activeFocusTaskId.value = null
+                _isFocusTimerRunning.value = false
+            }
+        }
+    }
+
+    fun skipMissedTask(task: Task) {
+        _dismissedMissedTaskIds.value = _dismissedMissedTaskIds.value + task.id
+        skipCurrentFocus(task)
+    }
+
+    fun completeMissedTask(task: Task) {
+        _dismissedMissedTaskIds.value = _dismissedMissedTaskIds.value + task.id
+        completeCurrentFocus(task)
+    }
+
+    fun startMyDay() {
+        viewModelScope.launch {
+            repository.startMyDay(todayString)
         }
     }
 

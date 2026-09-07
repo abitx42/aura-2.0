@@ -63,6 +63,29 @@ export async function runPlansTests() {
   }
   console.log('✅ Test P5 Passed: Unauthenticated activate request rejected');
 
+  // Test 6: Unauthenticated update execution request rejected
+  const unauthExecRes = await app.inject({
+    method: 'POST',
+    url: '/api/v1/daily-plans/33333333-3333-3333-3333-333333333333/items/44444444-4444-4444-4444-444444444444/execution',
+    payload: { executionState: 'IN_PROGRESS' },
+  });
+  if (unauthExecRes.statusCode !== 401) {
+    throw new Error(`Expected 401 for unauthenticated execution request, got ${unauthExecRes.statusCode}`);
+  }
+  console.log('✅ Test P6 Passed: Unauthenticated execution update request rejected');
+
+  // Test 7: Invalid executionState payload rejected
+  const badExecRes = await app.inject({
+    method: 'POST',
+    url: '/api/v1/daily-plans/33333333-3333-3333-3333-333333333333/items/44444444-4444-4444-4444-444444444444/execution',
+    headers: { authorization: `Bearer ${token}` },
+    payload: { executionState: 'INVALID_STATE' },
+  });
+  if (badExecRes.statusCode !== 422) {
+    throw new Error(`Expected 422 for invalid execution state, got ${badExecRes.statusCode}`);
+  }
+  console.log('✅ Test P7 Passed: Schema rejects invalid executionState in payload');
+
   await app.close();
   console.log('🎉 All Daily Plans tests completed successfully!');
 }

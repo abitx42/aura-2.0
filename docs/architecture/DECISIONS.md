@@ -131,3 +131,35 @@
   - Clean separation of task deadlines vs daily scheduling.
   - Personalized time budgeting that scales across any lifestyle baseline.
 
+---
+
+## ADR-011: Daily Plan Primary Status Cleanliness & Execution State Separation
+
+- **Context**: 
+  1. The daily plan state machine historically conflated modification status (`MODIFIED`) with the primary lifecycle phase. In reality, a plan remains `LOCKED` or `ACTIVE` while being modified, and tracking modification is properly handled via `updated_at` and `life_events` (ADR-009).
+  2. Executing tasks inside a daily plan requires granular execution telemetry (`actual_start`, `actual_duration_seconds`, execution status: `NOT_STARTED`, `IN_PROGRESS`, `PAUSED`, `COMPLETED`, `SKIPPED`) at the plan item level, completely separate from the overarching domain `Task.status` (`PENDING`, `COMPLETED`).
+  3. When a scheduled time block ends without task completion, simply dropping or ignoring the task destroys accountability, while aggressively failing it causes anxiety.
+- **Decision**:
+  1. Preserve clean primary lifecycle phases:
+     $$\text{DRAFT} \longrightarrow \text{LOCKED} \longrightarrow \text{ACTIVE} \longrightarrow \text{REVIEWED} \longrightarrow \text{ARCHIVED}$$
+     Modifications update `updated_at`, increment `version`, and append structured diffs to `life_events` (`PLAN_MODIFIED`) without destroying the plan's lifecycle identity.
+  2. Introduce dedicated **Execution State** on `DailyPlanItem`:
+     $$\text{Execution State} \in \{\text{NOT\_STARTED}, \text{IN\_PROGRESS}, \text{PAUSED}, \text{COMPLETED}, \text{SKIPPED}\}$$
+     Tracking `actual_start` timestamp and `actual_duration_seconds`.
+  3. Deterministic **Current Focus Engine v1** hierarchy:
+     1. Manually active focus task
+     2. Task currently within its scheduled time block ($t_{\text{start}} \le \text{now} < t_{\text{start}} + \text{duration}$)
+     3. Missed/overdue scheduled item (scheduled block has elapsed without completion)
+     4. Next scheduled incomplete task today
+     5. Highest-priority planned task (by locked sequence sort order)
+     6. Empty state
+  4. Non-destructive **Missed Block Reconciliation**: When an incomplete task's scheduled block lapses, Aura presents an explicit 4-action reconciliation prompt:
+     - `Continue Now`: Resume focus timer immediately.
+     - `Move Later`: Reschedule time slot later today.
+     - `Skip Today`: Mark execution state `SKIPPED` without deleting the task.
+     - `Complete`: Mark as done.
+- **Consequences**:
+  - Eliminates lifecycle state ambiguity.
+  - Generates authentic time execution metrics (planned vs actual duration) for future Insight Engine analytics.
+  - Guarantees zero missed tasks silently disappear from user awareness.
+

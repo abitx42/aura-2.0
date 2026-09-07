@@ -2247,7 +2247,11 @@ fun DashboardScreen(
 
     val userDisplayName by viewModel.userDisplayName.collectAsState()
     val isTodayLocked by viewModel.isTodayLocked.collectAsState()
+    val isTodayPlanAwaitingActivation by viewModel.isTodayPlanAwaitingActivation.collectAsState()
     val currentFocusTask by viewModel.currentFocusTask.collectAsState()
+    val currentFocusPlanItem by viewModel.currentFocusPlanItem.collectAsState()
+    val isCurrentFocusMissed by viewModel.isCurrentFocusMissed.collectAsState()
+    val nextUpTask by viewModel.nextUpTask.collectAsState()
     val isFocusTimerRunning by viewModel.isFocusTimerRunning.collectAsState()
     val focusTimerSeconds by viewModel.focusTimerSeconds.collectAsState()
 
@@ -2314,76 +2318,140 @@ fun DashboardScreen(
         // SCREEN 11: PLAN STATUS BANNER
         // ==========================================
         item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .auraSpringPress(
-                        cornerRadius = 16.dp,
-                        onClick = { viewModel.navigateTo(Section.Tasks) }
-                    )
-                    .border(
-                        1.dp,
-                        if (isTodayLocked) AuraTheme.colors.positiveGreen.copy(alpha = 0.5f) else AuraTheme.colors.cardBorder,
-                        RoundedCornerShape(16.dp)
-                    ),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (isTodayLocked) AuraTheme.colors.positiveGreen.copy(alpha = 0.1f) else AuraTheme.colors.cardBackground
-                ),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Row(
+            if (isTodayPlanAwaitingActivation) {
+                Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                        .border(1.5.dp, AuraTheme.colors.accentBrand.copy(alpha = 0.8f), RoundedCornerShape(20.dp)),
+                    colors = CardDefaults.cardColors(containerColor = AuraTheme.colors.accentBrand.copy(alpha = 0.08f)),
+                    shape = RoundedCornerShape(20.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (isTodayLocked) AuraTheme.colors.positiveGreen.copy(alpha = 0.2f)
-                                    else AuraTheme.colors.accentBrand.copy(alpha = 0.2f)
-                                ),
-                            contentAlignment = Alignment.Center
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Icon(
-                                imageVector = if (isTodayLocked) Icons.Default.Lock else Icons.Default.Bolt,
-                                contentDescription = null,
-                                tint = if (isTodayLocked) AuraTheme.colors.positiveGreen else AuraTheme.colors.accentBrand,
-                                modifier = Modifier.size(18.dp)
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(AuraTheme.colors.accentBrand.copy(alpha = 0.2f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("☀️", fontSize = 20.sp)
+                            }
+                            Column {
+                                Text(
+                                    text = "Morning Kickoff ☀️",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = AuraTheme.colors.textPrimary
+                                )
+                                Text(
+                                    text = "You planned your day last night. Ready to execute?",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = AuraTheme.colors.textSecondary,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                        if (currentFocusTask != null) {
+                            Text(
+                                text = "🎯 First Focus: ${currentFocusTask!!.title}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = AuraTheme.colors.accentBrand
                             )
                         }
-                        Column {
-                            Text(
-                                text = if (isTodayLocked) "Today Planned & Locked 🔒" else "Day Not Planned Yet",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = AuraTheme.colors.textPrimary
-                            )
-                            Text(
-                                text = if (isTodayLocked) "${stats.todayCompletedTasksCount} of ${stats.todayTasksCount} objectives finished" else "Lock in commitments to sharpen focus",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = AuraTheme.colors.textSecondary,
-                                fontSize = 11.sp
-                            )
+                        Button(
+                            onClick = { viewModel.startMyDay() },
+                            colors = ButtonDefaults.buttonColors(containerColor = AuraTheme.colors.accentBrand),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth().height(46.dp)
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("START MY DAY 🚀", fontWeight = FontWeight.Black, fontSize = 13.sp)
                         }
                     }
-
-                    if (!isTodayLocked) {
-                        Button(
-                            onClick = { viewModel.navigateTo(Section.Tasks) },
-                            colors = ButtonDefaults.buttonColors(containerColor = AuraTheme.colors.accentBrand),
-                            shape = RoundedCornerShape(10.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                            modifier = Modifier.height(32.dp)
+                }
+            } else {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .auraSpringPress(
+                            cornerRadius = 16.dp,
+                            onClick = { viewModel.navigateTo(Section.Tasks) }
+                        )
+                        .border(
+                            1.dp,
+                            if (isTodayLocked) AuraTheme.colors.positiveGreen.copy(alpha = 0.5f) else AuraTheme.colors.cardBorder,
+                            RoundedCornerShape(16.dp)
+                        ),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isTodayLocked) AuraTheme.colors.positiveGreen.copy(alpha = 0.1f) else AuraTheme.colors.cardBackground
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Text("Plan Day", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (isTodayLocked) AuraTheme.colors.positiveGreen.copy(alpha = 0.2f)
+                                        else AuraTheme.colors.accentBrand.copy(alpha = 0.2f)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (isTodayLocked) Icons.Default.Bolt else Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = if (isTodayLocked) AuraTheme.colors.positiveGreen else AuraTheme.colors.accentBrand,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = if (isTodayLocked) "Today in Progress ⚡" else "Day Not Planned Yet",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = AuraTheme.colors.textPrimary
+                                )
+                                Text(
+                                    text = if (isTodayLocked) "${stats.todayCompletedTasksCount} of ${stats.todayTasksCount} commitments finished" else "Lock in commitments to sharpen focus",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = AuraTheme.colors.textSecondary,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+
+                        if (!isTodayLocked) {
+                            Button(
+                                onClick = { viewModel.navigateTo(Section.Tasks) },
+                                colors = ButtonDefaults.buttonColors(containerColor = AuraTheme.colors.accentBrand),
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Text("Plan Day", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
@@ -2391,20 +2459,23 @@ fun DashboardScreen(
         }
 
         // ==========================================
-        // SCREEN 11: DETERMINISTIC CURRENT FOCUS CARD
+        // SECTION 1: DETERMINISTIC CURRENT FOCUS CARD (ADR-007, ADR-011)
         // ==========================================
         item {
             if (currentFocusTask != null) {
                 val focusTask = currentFocusTask!!
+                val isMissed = isCurrentFocusMissed
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .border(
                             1.5.dp,
-                            AuraTheme.colors.accentBrand.copy(alpha = 0.7f),
+                            if (isMissed) Color(0xFFF59E0B) else AuraTheme.colors.accentBrand.copy(alpha = 0.7f),
                             RoundedCornerShape(24.dp)
                         ),
-                    colors = CardDefaults.cardColors(containerColor = AuraTheme.colors.cardBackground),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isMissed) Color(0xFFF59E0B).copy(alpha = 0.04f) else AuraTheme.colors.cardBackground
+                    ),
                     shape = RoundedCornerShape(24.dp)
                 ) {
                     Column(
@@ -2428,15 +2499,18 @@ fun DashboardScreen(
                                         .size(8.dp)
                                         .clip(CircleShape)
                                         .background(
-                                            if (isFocusTimerRunning) AuraTheme.colors.positiveGreen
+                                            if (isMissed) Color(0xFFF59E0B)
+                                            else if (isFocusTimerRunning) AuraTheme.colors.positiveGreen
                                             else AuraTheme.colors.accentBrand
                                         )
                                 )
                                 Text(
-                                    text = if (isFocusTimerRunning) "FOCUS IN PROGRESS" else "CURRENT FOCUS",
+                                    text = if (isMissed) "⚠️ MISSED SCHEDULED BLOCK"
+                                           else if (isFocusTimerRunning) "⚡ FOCUS IN PROGRESS"
+                                           else "🔥 CURRENT FOCUS",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Black,
-                                    color = AuraTheme.colors.accentBrand,
+                                    color = if (isMissed) Color(0xFFF59E0B) else AuraTheme.colors.accentBrand,
                                     letterSpacing = 1.2.sp
                                 )
                             }
@@ -2500,8 +2574,68 @@ fun DashboardScreen(
                             )
                         }
 
-                        // Timer or Action Row
-                        if (isFocusTimerRunning || focusTimerSeconds < 25 * 60) {
+                        // Missed Block Reconciliation Banner OR Timer/Actions
+                        if (isMissed) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(Color(0xFFF59E0B).copy(alpha = 0.12f))
+                                    .padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Text(
+                                    text = "Your scheduled block has ended. What happened?",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = AuraTheme.colors.textPrimary
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Button(
+                                        onClick = { viewModel.continueMissedTask(focusTask) },
+                                        colors = ButtonDefaults.buttonColors(containerColor = AuraTheme.colors.accentBrand),
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier.weight(1f).height(38.dp),
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                                    ) {
+                                        Text("Continue Now", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    OutlinedButton(
+                                        onClick = { viewModel.moveMissedTaskLater(focusTask) },
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier.weight(1f).height(38.dp),
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                                    ) {
+                                        Text("Move Later", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedButton(
+                                        onClick = { viewModel.skipMissedTask(focusTask) },
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier.weight(1f).height(38.dp),
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                                    ) {
+                                        Text("Skip Today", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = AuraTheme.colors.textSecondary)
+                                    }
+                                    Button(
+                                        onClick = { viewModel.completeMissedTask(focusTask) },
+                                        colors = ButtonDefaults.buttonColors(containerColor = AuraTheme.colors.positiveGreen),
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier.weight(1f).height(38.dp),
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                                    ) {
+                                        Text("Complete", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        } else if (isFocusTimerRunning || focusTimerSeconds < 25 * 60) {
                             val minutes = focusTimerSeconds / 60
                             val seconds = focusTimerSeconds % 60
                             Row(
@@ -2575,6 +2709,14 @@ fun DashboardScreen(
                                     Icon(Icons.Default.Check, contentDescription = null, tint = AuraTheme.colors.positiveGreen, modifier = Modifier.size(16.dp))
                                 }
                                 OutlinedButton(
+                                    onClick = { viewModel.skipCurrentFocus(focusTask) },
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = BorderStroke(1.dp, AuraTheme.colors.cardBorder),
+                                    modifier = Modifier.height(44.dp)
+                                ) {
+                                    Icon(Icons.Default.Close, contentDescription = "Skip Focus", tint = AuraTheme.colors.textSecondary, modifier = Modifier.size(16.dp))
+                                }
+                                OutlinedButton(
                                     onClick = { viewModel.rescheduleTask(focusTask, viewModel.tomorrowString) },
                                     shape = RoundedCornerShape(12.dp),
                                     border = BorderStroke(1.dp, AuraTheme.colors.cardBorder),
@@ -2627,12 +2769,87 @@ fun DashboardScreen(
             }
         }
 
+        // ==========================================
+        // SECTION 2: NEXT UP CARD
+        // ==========================================
+        item {
+            if (nextUpTask != null) {
+                val next = nextUpTask!!
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, AuraTheme.colors.cardBorder, RoundedCornerShape(20.dp)),
+                    colors = CardDefaults.cardColors(containerColor = AuraTheme.colors.cardBackground),
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 18.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text("⏭️", fontSize = 12.sp)
+                                Text(
+                                    text = "NEXT UP",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Black,
+                                    color = AuraTheme.colors.textMuted,
+                                    letterSpacing = 1.2.sp
+                                )
+                            }
+                            Text(
+                                text = next.title,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = AuraTheme.colors.textPrimary
+                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Schedule,
+                                    contentDescription = null,
+                                    tint = AuraTheme.colors.textMuted,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Text(
+                                    text = next.time?.ifBlank { "Following current focus" } ?: "Following current focus",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = AuraTheme.colors.textSecondary,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+
+                        Button(
+                            onClick = { viewModel.startFocus(next) },
+                            colors = ButtonDefaults.buttonColors(containerColor = AuraTheme.colors.accentBrand.copy(alpha = 0.15f)),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.height(34.dp)
+                        ) {
+                            Text("Start Next", color = AuraTheme.colors.accentBrand, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
         if (isDashboardLoading) {
             item {
                 AuraLoadingState.HubGrid()
             }
         } else {
-            // COGNITIVE STATUS PROGRESS HERO CARD
+            // ==========================================
+            // SECTION 3: TODAY'S PROGRESS CARD
+            // ==========================================
             item {
                 Card(
                     modifier = Modifier
@@ -2657,13 +2874,19 @@ fun DashboardScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "DAILY OBJECTIVES PROGRESS",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = AuraTheme.colors.textMuted,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.sp
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text("📊", fontSize = 12.sp)
+                                Text(
+                                    "TODAY'S PROGRESS",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = AuraTheme.colors.textMuted,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp
+                                )
+                            }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = "${stats.productivityPercentage}% ACHIEVED",
@@ -2671,12 +2894,22 @@ fun DashboardScreen(
                                 fontWeight = FontWeight.Black,
                                 color = AuraTheme.colors.accentBrand
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "${stats.todayCompletedTasksCount} objectives finished of ${stats.todayTasksCount} scheduled today",
+                                text = "${stats.todayCompletedTasksCount} of ${stats.todayTasksCount} commitments done",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = AuraTheme.colors.textSecondary
                             )
+                            if (stats.allTimeStreakValue > 0) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "🔥 ${stats.allTimeStreakValue} day streak active",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = AuraTheme.colors.accentBrand,
+                                    fontSize = 11.sp
+                                )
+                            }
                         }
 
                         // Progress Ring
