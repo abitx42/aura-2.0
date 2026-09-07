@@ -82,7 +82,7 @@ Before Phase 3 can be unlocked, all 10 objective criteria must be met and checke
 5. **Night Review Integrity**: Night review completed honestly with task reconciliations bridged to tomorrow.
 6. **Lock $\to$ Active Transition**: Lock Tomorrow 🔒 $\to$ Morning Kickoff ☀️ $\to$ Active transition verified on real phone.
 7. **Background Timer Invariance**: Focus countdown verified during phone sleep (monotonic elapsed invariance).
-8. **3-Category Feedback Triaged**: Founder observations logged into 🔴 Bugs, 🟡 Friction, and 🔵 Missing Expectations.
+8. **4-Category Feedback Triaged**: Founder observations logged into 🔴 Bugs, 🟡 Friction, 🔵 Missing Expectations, and 🟢 Magic Moments.
 9. **Critical UX Blockers Fixed**: All P0/P1 friction points resolved.
 10. **Zero Data Loss**: Database records between Room SQLite and Fastify PostgreSQL strictly preserved.
 

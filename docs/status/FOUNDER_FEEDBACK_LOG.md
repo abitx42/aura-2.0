@@ -33,13 +33,16 @@ ALL CONDITIONS MET  ──→  PHASE 3 UNLOCKED 🔓
 
 ---
 
-## 🧭 The 3-Category Feedback Framework
+## 🧭 The 4-Category Founder Feedback Framework
 
 When evaluating Aura throughout the day, categorize observations into:
 
-1. 🔴 **Bugs** (`BUG`): *Something broke or threw an error.*
-2. 🟡 **Friction** (`FRICTION`): *Something works, but I don't want to use it or it feels clunky.*
-3. 🔵 **Missing Expectation** (`EXPECTATION`): *I naturally expected Aura to do something here, but it didn't.*
+| Category | Guiding Question | Purpose |
+| :--- | :--- | :--- |
+| 🔴 **Bug** (`BUG`) | *What broke or threw an error?* | Direct defect to fix immediately |
+| 🟡 **Friction** (`FRICTION`) | *What worked, but annoyed me or felt clunky?* | Flow & ergonomic optimization |
+| 🔵 **Missing Expectation** (`EXPECTATION`) | *What did I naturally expect Aura to do here?* | Feature & UX alignment for Phase 3 |
+| 🟢 **Magic Moment** (`MAGIC`) | *What made Aura genuinely useful, surprising, or satisfying?* | Core value proposition to amplify |
 
 ---
 
@@ -66,12 +69,13 @@ When evaluating Aura throughout the day, categorize observations into:
 
 ## 🚨 Founder Observations & Triage Log
 
-*Record observations using the 3 categories (🔴 Bug, 🟡 Friction, 🔵 Missing Expectation).*
+*Record observations using the 4 categories (🔴 Bug, 🟡 Friction, 🔵 Missing Expectation, 🟢 Magic Moment).*
 
-| ID | Timestamp | Category | Area / Screen | Observed Friction / Bug / Expectation | Expected Behavior | Status |
+| ID | Timestamp | Category | Area / Screen | Observed Friction / Bug / Expectation / Magic | Expected Behavior / Why it felt great | Status |
 | :---: | :---: | :---: | :---: | :--- | :--- | :---: |
 | `FB-01` | *2026-09-08* | 🟡 Friction | Focus Timer | *Screen locked, chime was quiet* | *Prominent haptic pulse on timer end* | *Open* |
 | `FB-02` | *2026-09-08* | 🔵 Expectation | Plan Tomorrow | *Expected quick reorder via drag* | *Simple up/down arrow or drag handles* | *Open* |
+| `FB-03` | *2026-09-08* | 🟢 Magic | Current Focus | *Woke up and immediate focus was ready without deciding* | *Zero friction starting morning work* | *Delighted* |
 
 ---
 

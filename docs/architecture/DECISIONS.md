@@ -263,3 +263,32 @@
 - **Consequences:**
   - Fast, observable daily testing cycle for founder Aadi without tethered computer requirements.
   - Complete forensics trail for any edge-case crash or sync anomaly during 14-day evaluation.
+
+---
+
+### ADR-016: Package Namespace Audit & Unified Identifier Strategy (`com.aura.personalos`)
+- **Status:** Accepted / Planned Migration (Phase 2)
+- **Context:**
+  - An audit revealed an architectural distinction between the Android package namespace and application ID:
+    - `applicationId = "com.aura.personalos"` (controls Android OS identity, app data directory `/data/data/com.aura.personalos/`, and Google Play ID).
+    - `namespace = "com.example"` (controls generated `R` and `BuildConfig` classes, as well as root Kotlin package directories `com/example/...`).
+  - In modern Android Gradle Plugin (AGP 8.0+), decoupling `namespace` from `applicationId` is officially supported and fully functional. However, having `com.example` as the internal source package represents technical debt left over from project scaffolding.
+  - Blindly renaming all package directories, imports, and Room schemas mid-milestone creates unnecessary risk of breaking Room SQLite migrations, KSP code generation, or Compose references right as physical device testing commences.
+- **Decision:**
+  1. **Phase 2 Invariant**: Maintain the current stable configuration (`applicationId = "com.aura.personalos"`, `namespace = "com.example"`) during the 7–14 day Founder Testing period to ensure zero destabilization of the verified test suites and APK.
+  2. **Explicit Identifier Mapping**:
+     - Android OS / Package Manager: `com.aura.personalos`
+     - Launch Activity FQCN: `com.aura.personalos/com.example.MainActivity`
+     - Crash Log Directory: `/data/data/com.aura.personalos/files/aura_crash_log.txt`
+     - Internal Code Imports: `com.example.*` and `com.example.BuildConfig`
+  3. **Scheduled Clean Migration (Post-Phase 2)**:
+     - Execute a dedicated, atomic refactoring task before public release:
+       1. Move source directory: `android/app/src/main/java/com/example` $\longrightarrow$ `com/aura/personalos`.
+       2. Move unit/Robolectric test directory: `android/app/src/test/java/com/example` $\longrightarrow$ `com/aura/personalos`.
+       3. Update `namespace = "com.aura.personalos"` in `build.gradle.kts`.
+       4. Update `AndroidManifest.xml` package and activity references.
+       5. Verify clean Room KSP schema generation without database destruction.
+- **Consequences:**
+  - Eliminates the risk of regression right before physical device testing.
+  - Establishes a documented, disciplined migration plan for clean production branding.
+
