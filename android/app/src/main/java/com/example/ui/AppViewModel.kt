@@ -109,14 +109,26 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         // Schedule periodic background sync
         SyncWorker.schedulePeriodicSync(application)
 
-        // Focus Timer Ticker
+        // Focus Timer Ticker (ADR-012 Wall-Clock Anchored Telemetry)
         viewModelScope.launch {
             while (true) {
-                kotlinx.coroutines.delay(1000)
-                if (_isFocusTimerRunning.value && _focusTimerSeconds.value > 0) {
-                    _focusTimerSeconds.value -= 1
-                } else if (_isFocusTimerRunning.value && _focusTimerSeconds.value <= 0) {
-                    _isFocusTimerRunning.value = false
+                kotlinx.coroutines.delay(500)
+                if (_isFocusTimerRunning.value) {
+                    val startedAt = _focusSessionStartedAt.value
+                    if (startedAt != null) {
+                        val wallElapsed = ((System.currentTimeMillis() - startedAt) / 1000L).toInt()
+                        val totalElapsed = _focusSessionAccumulatedSeconds.value + wallElapsed
+                        val target = _focusSessionTargetSeconds.value
+                        val remaining = (target - totalElapsed).coerceAtLeast(0)
+                        _focusTimerSeconds.value = remaining
+                        _timerSecondsLeft.value = remaining
+                        if (remaining <= 0) {
+                            _isFocusTimerRunning.value = false
+                            _isTimerRunning.value = false
+                            _focusSessionStartedAt.value = null
+                            _focusSessionAccumulatedSeconds.value = target
+                        }
+                    }
                 }
             }
         }
@@ -936,6 +948,36 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val _focusTimerSeconds = MutableStateFlow(25 * 60)
     val focusTimerSeconds: StateFlow<Int> = _focusTimerSeconds
 
+    val _focusSessionStartedAt = MutableStateFlow<Long?>(null)
+    val focusSessionStartedAt: StateFlow<Long?> = _focusSessionStartedAt
+
+    val _focusSessionTargetSeconds = MutableStateFlow(25 * 60)
+    val focusSessionTargetSeconds: StateFlow<Int> = _focusSessionTargetSeconds
+
+    val _focusSessionAccumulatedSeconds = MutableStateFlow(0)
+    val focusSessionAccumulatedSeconds: StateFlow<Int> = _focusSessionAccumulatedSeconds
+
+    private val _isFocusOverlayVisible = MutableStateFlow(false)
+    val isFocusOverlayVisible: StateFlow<Boolean> = _isFocusOverlayVisible
+
+    fun showFocusOverlay() {
+        _isFocusOverlayVisible.value = true
+    }
+
+    fun dismissFocusOverlay() {
+        _isFocusOverlayVisible.value = false
+    }
+
+    fun getFocusSessionElapsedSeconds(): Int {
+        val base = _focusSessionAccumulatedSeconds.value
+        val start = _focusSessionStartedAt.value
+        return if (_isFocusTimerRunning.value && start != null) {
+            base + ((System.currentTimeMillis() - start) / 1000L).toInt()
+        } else {
+            base
+        }
+    }
+
     private val _dismissedMissedTaskIds = MutableStateFlow<Set<Int>>(emptySet())
 
     data class FocusEngineEvaluation(
@@ -1135,10 +1177,33 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         .map { it.nextUpTask }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    fun startFocus(task: Task) {
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val currentFocusSubtasks: StateFlow<List<Subtask>> = currentFocusTask
+        .flatMapLatest { task ->
+            if (task != null) repository.getSubtasksForTask(task.id) else flowOf(emptyList())
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun addFocusSubtask(title: String) {
+        val task = currentFocusTask.value ?: return
+        if (title.isBlank()) return
+        viewModelScope.launch {
+            repository.addSubtask(Subtask(taskId = task.id, taskSyncId = task.syncId, title = title.trim()))
+        }
+    }
+
+    fun startFocus(task: Task, durationMinutes: Int = 25) {
+        val targetSec = durationMinutes * 60
         _activeFocusTaskId.value = task.id
-        _focusTimerSeconds.value = 25 * 60
+        _activeTimerTaskId.value = task.id
+        _focusSessionTargetSeconds.value = targetSec
+        _focusSessionAccumulatedSeconds.value = 0
+        _focusSessionStartedAt.value = System.currentTimeMillis()
+        _focusTimerSeconds.value = targetSec
+        _timerSecondsLeft.value = targetSec
         _isFocusTimerRunning.value = true
+        _isTimerRunning.value = true
+        _isFocusOverlayVisible.value = true
         viewModelScope.launch {
             repository.updatePlanItemExecutionByTask(
                 taskId = task.id,
@@ -1149,11 +1214,41 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun startFocus(taskId: Int, durationMinutes: Int = 25) {
+        val task = allTasks.value.find { it.id == taskId }
+        if (task != null) {
+            startFocus(task, durationMinutes)
+        } else {
+            val targetSec = durationMinutes * 60
+            _activeFocusTaskId.value = taskId
+            _activeTimerTaskId.value = taskId
+            _focusSessionTargetSeconds.value = targetSec
+            _focusSessionAccumulatedSeconds.value = 0
+            _focusSessionStartedAt.value = System.currentTimeMillis()
+            _focusTimerSeconds.value = targetSec
+            _timerSecondsLeft.value = targetSec
+            _isFocusTimerRunning.value = true
+            _isTimerRunning.value = true
+            _isFocusOverlayVisible.value = true
+            viewModelScope.launch {
+                repository.updatePlanItemExecutionByTask(
+                    taskId = taskId,
+                    planDate = todayString,
+                    state = "IN_PROGRESS",
+                    actualDurationSeconds = 0
+                )
+            }
+        }
+    }
+
     fun pauseFocusTimer() {
+        val elapsed = getFocusSessionElapsedSeconds()
+        _focusSessionAccumulatedSeconds.value = elapsed
+        _focusSessionStartedAt.value = null
         _isFocusTimerRunning.value = false
-        val activeId = _activeFocusTaskId.value
+        _isTimerRunning.value = false
+        val activeId = _activeFocusTaskId.value ?: _activeTimerTaskId.value
         if (activeId != null) {
-            val elapsed = (25 * 60) - _focusTimerSeconds.value
             viewModelScope.launch {
                 repository.updatePlanItemExecutionByTask(
                     taskId = activeId,
@@ -1166,15 +1261,19 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun resumeFocusTimer() {
-        _isFocusTimerRunning.value = true
-        val activeId = _activeFocusTaskId.value
-        if (activeId != null) {
-            viewModelScope.launch {
-                repository.updatePlanItemExecutionByTask(
-                    taskId = activeId,
-                    planDate = todayString,
-                    state = "IN_PROGRESS"
-                )
+        if (_focusTimerSeconds.value > 0) {
+            _focusSessionStartedAt.value = System.currentTimeMillis()
+            _isFocusTimerRunning.value = true
+            _isTimerRunning.value = true
+            val activeId = _activeFocusTaskId.value ?: _activeTimerTaskId.value
+            if (activeId != null) {
+                viewModelScope.launch {
+                    repository.updatePlanItemExecutionByTask(
+                        taskId = activeId,
+                        planDate = todayString,
+                        state = "IN_PROGRESS"
+                    )
+                }
             }
         }
     }
@@ -1187,18 +1286,37 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun extendFocusTimer(additionalMinutes: Int) {
+        val extraSec = additionalMinutes * 60
+        _focusSessionTargetSeconds.value += extraSec
+        _focusTimerSeconds.value += extraSec
+        _timerSecondsLeft.value = _focusTimerSeconds.value
+    }
+
     fun resetFocusTimer() {
         _isFocusTimerRunning.value = false
-        _focusTimerSeconds.value = 25 * 60
+        _isTimerRunning.value = false
+        _focusSessionStartedAt.value = null
+        _focusSessionAccumulatedSeconds.value = 0
+        _focusTimerSeconds.value = _focusSessionTargetSeconds.value
+        _timerSecondsLeft.value = 0
+        _activeTimerTaskId.value = null
     }
 
     fun completeCurrentFocus(task: Task) {
-        val elapsed = (25 * 60) - _focusTimerSeconds.value
-        toggleTaskCompleted(task)
+        val elapsed = getFocusSessionElapsedSeconds()
         _isFocusTimerRunning.value = false
+        _isTimerRunning.value = false
+        _focusSessionStartedAt.value = null
+        _focusSessionAccumulatedSeconds.value = 0
         if (_activeFocusTaskId.value == task.id) {
             _activeFocusTaskId.value = null
         }
+        if (_activeTimerTaskId.value == task.id) {
+            _activeTimerTaskId.value = null
+        }
+        _isFocusOverlayVisible.value = false
+        toggleTaskCompleted(task)
         viewModelScope.launch {
             repository.updatePlanItemExecutionByTask(
                 taskId = task.id,
@@ -1210,11 +1328,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun skipCurrentFocus(task: Task) {
-        val elapsed = (25 * 60) - _focusTimerSeconds.value
+        val elapsed = getFocusSessionElapsedSeconds()
         _isFocusTimerRunning.value = false
+        _isTimerRunning.value = false
+        _focusSessionStartedAt.value = null
+        _focusSessionAccumulatedSeconds.value = 0
         if (_activeFocusTaskId.value == task.id) {
             _activeFocusTaskId.value = null
         }
+        if (_activeTimerTaskId.value == task.id) {
+            _activeTimerTaskId.value = null
+        }
+        _isFocusOverlayVisible.value = false
         viewModelScope.launch {
             repository.updatePlanItemExecutionByTask(
                 taskId = task.id,
@@ -1321,8 +1446,24 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleTaskCompleted(task: Task) {
         viewModelScope.launch {
-            val updated = task.copy(isCompleted = !task.isCompleted)
+            val isNowCompleted = !task.isCompleted
+            val updated = task.copy(isCompleted = isNowCompleted)
             repository.updateTask(updated)
+            
+            // Reconcile daily plan execution state deterministically (ADR-011, ADR-012)
+            val execState = if (isNowCompleted) "COMPLETED" else "NOT_STARTED"
+            val durationSec = if (isNowCompleted) {
+                if (_activeFocusTaskId.value == task.id) getFocusSessionElapsedSeconds() else 0
+            } else 0
+            repository.updatePlanItemExecutionByTask(task.id, todayString, execState, durationSec)
+
+            if (isNowCompleted && _activeFocusTaskId.value == task.id) {
+                _isFocusTimerRunning.value = false
+                _isTimerRunning.value = false
+                _activeFocusTaskId.value = null
+                _activeTimerTaskId.value = null
+                _focusSessionStartedAt.value = null
+            }
             
             // If recurrence is verified and completed, auto-schedule next instance
             if (updated.isCompleted && updated.recurrence != "None") {
@@ -1897,7 +2038,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // ==========================================
-    // TASK ACTIVE FOCUS TIMER
+    // TASK ACTIVE FOCUS TIMER (Delegates to ADR-012 Unified Execution Engine)
     // ==========================================
     private val _activeTimerTaskId = MutableStateFlow<Int?>(null)
     val activeTimerTaskId: StateFlow<Int?> = _activeTimerTaskId
@@ -1908,48 +2049,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _isTimerRunning = MutableStateFlow(false)
     val isTimerRunning: StateFlow<Boolean> = _isTimerRunning
 
-    private var timerJob: kotlinx.coroutines.Job? = null
-
     fun startTaskTimer(taskId: Int, durationMinutes: Int) {
-        _activeTimerTaskId.value = taskId
-        _timerSecondsLeft.value = durationMinutes * 60
-        _isTimerRunning.value = true
-        runTimerLoop()
+        startFocus(taskId, durationMinutes)
     }
 
     fun pauseTaskTimer() {
-        _isTimerRunning.value = false
-        timerJob?.cancel()
+        pauseFocusTimer()
     }
 
     fun resumeTaskTimer() {
-        if (_activeTimerTaskId.value != null && _timerSecondsLeft.value > 0) {
-            _isTimerRunning.value = true
-            runTimerLoop()
-        }
+        resumeFocusTimer()
     }
 
     fun resetTaskTimer() {
-        _isTimerRunning.value = false
-        timerJob?.cancel()
-        _timerSecondsLeft.value = 0
-        _activeTimerTaskId.value = null
-    }
-
-    private fun runTimerLoop() {
-        timerJob?.cancel()
-        timerJob = viewModelScope.launch(Dispatchers.Default) {
-            while (_isTimerRunning.value && _timerSecondsLeft.value > 0) {
-                kotlinx.coroutines.delay(1000L)
-                if (_isTimerRunning.value) {
-                    _timerSecondsLeft.value -= 1
-                    if (_timerSecondsLeft.value <= 0) {
-                        _isTimerRunning.value = false
-                        break
-                    }
-                }
-            }
-        }
+        resetFocusTimer()
     }
 
     // ==========================================

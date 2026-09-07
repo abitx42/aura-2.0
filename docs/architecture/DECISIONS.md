@@ -163,3 +163,24 @@
   - Generates authentic time execution metrics (planned vs actual duration) for future Insight Engine analytics.
   - Guarantees zero missed tasks silently disappear from user awareness.
 
+---
+
+## ADR-012: System-Clock Anchored Execution Telemetry & Unified Focus Mode
+
+- **Context**:
+  1. A naive coroutine timer loop (`while (running) { delay(1000); seconds-- }`) drifts significantly when the operating system throttles background processes, sleeps the CPU, or pauses application threads during incoming calls or navigation.
+  2. Previously, two timer implementations existed in parallel (one for Current Focus, one for Kanban/Task timer), risking inconsistent state and unsynced execution metrics.
+  3. When focusing on a task, users frequently need access to broken-down subtasks without navigating away from the execution session.
+- **Decision**:
+  1. Anchor all active execution telemetry to wall-clock timestamps:
+     $$\text{Elapsed Seconds} = \frac{\text{System.currentTimeMillis}() - \text{sessionStartTimestamp}}{1000}$$
+     Persisting session start and target duration so timer state remains consistent across backgrounding, screen locks, and process recreations.
+  2. Unify all timer triggers (Today screen Current Focus, Tasks list, Kanban board) into a single canonical execution engine in `AppViewModel`.
+  3. Surface interactive subtasks directly inside the execution context so steps can be completed in real time.
+  4. Ensure task completion deterministically finalizes execution metrics, synchronizes with Fastify backend via `TASK_EXECUTED`, and auto-advances the Current Focus Engine to the Next Up task.
+- **Consequences**:
+  - Zero timer drift regardless of Android battery optimizations or app backgrounding.
+  - Consistent telemetry recorded in Room and PostgreSQL.
+  - Seamless, distraction-free execution experience.
+
+

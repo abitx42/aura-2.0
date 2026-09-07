@@ -23,16 +23,16 @@
 📱 Android Runtime:        🔴 Pending real device / emulator run
 🔄 Real Device Sync:       🟡 Pending E2E device validation
 
-🎯 Core Daily Loop:        🔵 ACTIVE — Milestone 3C: Today + Current Focus & Execution State (3A & 3B Complete)
+🎯 Core Daily Loop:        🔵 ACTIVE — Milestone 3E: Night Review (3A, 3B, 3C, 3D Complete)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
 ### Milestone 3 Vertical Slice Build Order
 1. **Milestone 3A**: Plan Tomorrow ✅
 2. **Milestone 3B**: Lock Tomorrow 🔒 ✅
-3. **Milestone 3C**: Today + Current Focus (Deterministic logic) ◄── *(Active)*
-4. **Milestone 3D**: Task Execution
-5. **Milestone 3E**: Night Review 🌙
+3. **Milestone 3C**: Today + Current Focus (Deterministic logic) ✅
+4. **Milestone 3D**: Task Execution ✅
+5. **Milestone 3E**: Night Review 🌙 ◄── *(Next Active)*
 6. **Milestone 3F**: Real Offline E2E Test
 
 
@@ -51,6 +51,7 @@
 | **Offline-First Sync Engine**     | ✅ Complete | Room `pending_operations` queue drained to Fastify backend via WorkManager. |
 | **Daily Plans & Day Locking**     | ✅ Complete | Room `daily_plans` & `daily_plan_items` entities, DAOs, and repository methods. |
 | **Deterministic Current Focus**   | ✅ Complete | Invariant 2 engine: Active $\to$ Locked Plan Sequence $\to$ Scheduled time $\to$ Critical. |
+| **Task Execution Engine (ADR-012)**| ✅ Complete | Wall-clock anchored telemetry, unified timer state, interactive subtasks, Focus Execution Modal. |
 | **Today Screen (Screen 11)**      | ✅ Complete | Plan Status Banner + Current Focus hero card with focus timer + progress ring. |
 | **Planning Screen (Screen 12-16)**| ✅ Complete | Tabs (`Today`, `Tomorrow`, `Upcoming`) + 4-step Plan Tomorrow workflow + Lock Tomorrow 🔒. |
 | **Automated Verification Suites** | ✅ Complete | Multi-suite integration tests for auth, plans, sync, and actions in `backend/test/`. |

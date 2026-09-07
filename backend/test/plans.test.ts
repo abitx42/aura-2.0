@@ -86,6 +86,22 @@ export async function runPlansTests() {
   }
   console.log('✅ Test P7 Passed: Schema rejects invalid executionState in payload');
 
+  // Test 8: Invalid actualDurationSeconds or actualStart rejected by schema
+  const badDurationRes = await app.inject({
+    method: 'POST',
+    url: '/api/v1/daily-plans/33333333-3333-3333-3333-333333333333/items/44444444-4444-4444-4444-444444444444/execution',
+    headers: { authorization: `Bearer ${token}` },
+    payload: {
+      executionState: 'COMPLETED',
+      actualDurationSeconds: -50,
+      actualStart: 'not-a-valid-datetime',
+    },
+  });
+  if (badDurationRes.statusCode !== 422) {
+    throw new Error(`Expected 422 for invalid duration and start datetime, got ${badDurationRes.statusCode}`);
+  }
+  console.log('✅ Test P8 Passed: Schema rejects negative actualDurationSeconds and invalid actualStart ISO strings');
+
   await app.close();
   console.log('🎉 All Daily Plans tests completed successfully!');
 }

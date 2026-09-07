@@ -851,6 +851,15 @@ fun MainAppContainer(
                     )
                 }
 
+                // --- FOCUS EXECUTION OVERLAY BEGIN (ADR-012) ---
+                val isFocusOverlayVisible by viewModel.isFocusOverlayVisible.collectAsState()
+                if (isFocusOverlayVisible) {
+                    FocusExecutionModal(
+                        viewModel = viewModel,
+                        onDismiss = { viewModel.dismissFocusOverlay() }
+                    )
+                }
+
                 // --- AUDIO RECORDING DIALOG BEGIN ---
                 if (showAudioRecordDialog) {
                     val recordedDuration by viewModel.audioController.recordedDuration.collectAsState()
@@ -2643,16 +2652,25 @@ fun DashboardScreen(
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(AuraTheme.colors.screenBackground)
+                                    .clickable { viewModel.showFocusOverlay() }
                                     .padding(horizontal = 16.dp, vertical = 10.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = String.format(Locale.US, "%02d:%02d", minutes, seconds),
-                                    style = MaterialTheme.typography.headlineMedium,
-                                    fontWeight = FontWeight.Black,
-                                    color = AuraTheme.colors.accentBrand
-                                )
+                                Column {
+                                    Text(
+                                        text = String.format(Locale.US, "%02d:%02d", minutes, seconds),
+                                        style = MaterialTheme.typography.headlineMedium,
+                                        fontWeight = FontWeight.Black,
+                                        color = AuraTheme.colors.accentBrand
+                                    )
+                                    Text(
+                                        text = "Tap to open Focus Mode ⚡",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = AuraTheme.colors.textMuted
+                                    )
+                                }
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     IconButton(
                                         onClick = { viewModel.toggleFocusTimer() },
@@ -3053,7 +3071,7 @@ fun DashboardScreen(
                     task = task,
                     onClicked = { onOpenTask(task) },
                     onToggleCompleted = { viewModel.toggleTaskCompleted(task) },
-                    onStartTimer = { viewModel.startTaskTimer(task.id, 25) }
+                    onStartTimer = { viewModel.startFocus(task, 25) }
                 )
             }
         }
@@ -5420,5 +5438,338 @@ fun HabitsTabScreen(
             containerColor = AuraTheme.colors.cardBackground
         )
     }
+}
+
+// ==========================================
+// FOCUS EXECUTION MODAL (ADR-012)
+// Distraction-free, system-clock anchored execution session
+// ==========================================
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FocusExecutionModal(
+    viewModel: AppViewModel,
+    onDismiss: () -> Unit
+) {
+    val currentFocusTask by viewModel.currentFocusTask.collectAsState()
+    val isTimerRunning by viewModel.isFocusTimerRunning.collectAsState()
+    val timerSeconds by viewModel.focusTimerSeconds.collectAsState()
+    val targetSeconds by viewModel.focusSessionTargetSeconds.collectAsState()
+    val subtasks by viewModel.currentFocusSubtasks.collectAsState()
+    val view = androidx.compose.ui.platform.LocalView.current
+    var newSubtaskText by remember { mutableStateOf("") }
+
+    if (currentFocusTask == null) {
+        LaunchedEffect(Unit) {
+            onDismiss()
+        }
+        return
+    }
+    val task = currentFocusTask!!
+
+    val minutes = timerSeconds / 60
+    val seconds = timerSeconds % 60
+    val formattedTime = String.format(Locale.US, "%02d:%02d", minutes, seconds)
+    val elapsed = (targetSeconds - timerSeconds).coerceAtLeast(0)
+    val progress = if (targetSeconds > 0) (elapsed.toFloat() / targetSeconds.toFloat()).coerceIn(0f, 1f) else 0f
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        modifier = Modifier
+            .fillMaxWidth(0.94f)
+            .padding(vertical = 16.dp),
+        content = {
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = AuraTheme.colors.screenBackground),
+                border = BorderStroke(1.5.dp, AuraTheme.colors.accentBrand.copy(alpha = 0.8f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Header: Minimize button + Title + Status Chip
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isTimerRunning) AuraTheme.colors.positiveGreen else AuraTheme.colors.accentBrand)
+                            )
+                            Text(
+                                text = if (isTimerRunning) "FOCUS MODE ACTIVE" else "FOCUS PAUSED",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Black,
+                                color = if (isTimerRunning) AuraTheme.colors.positiveGreen else AuraTheme.colors.accentBrand,
+                                letterSpacing = 1.2.sp
+                            )
+                        }
+
+                        IconButton(
+                            onClick = {
+                                AuraHaptics.triggerSelection(view)
+                                onDismiss()
+                            },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Minimize Focus Overlay",
+                                tint = AuraTheme.colors.textSecondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    // Task Title & Context
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = task.title,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Black,
+                            color = AuraTheme.colors.textPrimary,
+                            textAlign = TextAlign.Center
+                        )
+                        if (task.description.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = task.description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = AuraTheme.colors.textSecondary,
+                                textAlign = TextAlign.Center,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    // Hero Monospace Timer & Circular Progress
+                    Box(
+                        modifier = Modifier.size(170.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier.fillMaxSize(),
+                            color = AuraTheme.colors.accentBrand,
+                            trackColor = AuraTheme.colors.cardBorder.copy(alpha = 0.3f),
+                            strokeWidth = 8.dp
+                        )
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = formattedTime,
+                                fontSize = 36.sp,
+                                fontWeight = FontWeight.Black,
+                                color = AuraTheme.colors.textPrimary,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                            )
+                            Text(
+                                text = "${task.priority} • ${task.energy}",
+                                fontSize = 11.sp,
+                                color = AuraTheme.colors.textSecondary,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
+                    // Quick Extend Controls (+5m, +15m)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                AuraHaptics.triggerSelection(view)
+                                viewModel.extendFocusTimer(5)
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, AuraTheme.colors.cardBorder),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            modifier = Modifier.height(34.dp)
+                        ) {
+                            Text("+5m", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = AuraTheme.colors.textPrimary)
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                AuraHaptics.triggerSelection(view)
+                                viewModel.extendFocusTimer(15)
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, AuraTheme.colors.cardBorder),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            modifier = Modifier.height(34.dp)
+                        ) {
+                            Text("+15m", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = AuraTheme.colors.textPrimary)
+                        }
+                    }
+
+                    // Subtasks Checklist Section
+                    Card(
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = AuraTheme.colors.cardBackground),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            val completedCount = subtasks.count { it.isCompleted }
+                            Text(
+                                text = "CHECKLIST (${completedCount}/${subtasks.size})",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = AuraTheme.colors.textMuted,
+                                letterSpacing = 1.sp
+                            )
+
+                            if (subtasks.isEmpty()) {
+                                Text(
+                                    text = "No subtasks yet. Break it down below.",
+                                    fontSize = 12.sp,
+                                    color = AuraTheme.colors.textSecondary
+                                )
+                            } else {
+                                subtasks.forEach { sub ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                AuraHaptics.triggerSubtleTick(view)
+                                                viewModel.toggleSubtaskCompleted(sub)
+                                            },
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Checkbox(
+                                            checked = sub.isCompleted,
+                                            onCheckedChange = {
+                                                AuraHaptics.triggerSubtleTick(view)
+                                                viewModel.toggleSubtaskCompleted(sub)
+                                            },
+                                            colors = CheckboxDefaults.colors(
+                                                checkedColor = AuraTheme.colors.positiveGreen,
+                                                checkmarkColor = Color.White
+                                            ),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Text(
+                                            text = sub.title,
+                                            fontSize = 13.sp,
+                                            color = if (sub.isCompleted) AuraTheme.colors.textMuted else AuraTheme.colors.textPrimary,
+                                            style = if (sub.isCompleted) androidx.compose.ui.text.TextStyle(
+                                                textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough
+                                            ) else MaterialTheme.typography.bodyMedium
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Inline add subtask
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = newSubtaskText,
+                                    onValueChange = { newSubtaskText = it },
+                                    placeholder = { Text("Add subtask...", fontSize = 11.sp, color = AuraTheme.colors.textMuted) },
+                                    modifier = Modifier.weight(1f).height(46.dp),
+                                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, color = AuraTheme.colors.textPrimary),
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                IconButton(
+                                    onClick = {
+                                        if (newSubtaskText.isNotBlank()) {
+                                            AuraHaptics.triggerSelection(view)
+                                            viewModel.addFocusSubtask(newSubtaskText)
+                                            newSubtaskText = ""
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(AuraTheme.colors.accentBrand)
+                                ) {
+                                    Icon(Icons.Default.Add, contentDescription = "Add", tint = Color.White, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
+                    }
+
+                    // Execution Controls: Play/Pause, Skip, Complete
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = {
+                                AuraHaptics.triggerSelection(view)
+                                viewModel.toggleFocusTimer()
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isTimerRunning) AuraTheme.colors.cardBorder else AuraTheme.colors.accentBrand
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f).height(46.dp)
+                        ) {
+                            Icon(
+                                if (isTimerRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(if (isTimerRunning) "PAUSE" else "RESUME", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                AuraHaptics.triggerSelection(view)
+                                viewModel.skipCurrentFocus(task)
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, AuraTheme.colors.cardBorder),
+                            modifier = Modifier.height(46.dp)
+                        ) {
+                            Text("SKIP", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = AuraTheme.colors.textSecondary)
+                        }
+
+                        Button(
+                            onClick = {
+                                AuraHaptics.triggerSelection(view)
+                                viewModel.completeCurrentFocus(task)
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = AuraTheme.colors.positiveGreen),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1.3f).height(46.dp)
+                        ) {
+                            Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("COMPLETE 🏁", color = Color.White, fontWeight = FontWeight.Black, fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+        }
+    )
 }
 

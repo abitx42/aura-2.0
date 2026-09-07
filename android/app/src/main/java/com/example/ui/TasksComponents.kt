@@ -284,6 +284,7 @@ fun TasksScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 6.dp)
+                        .clickable { viewModel.showFocusOverlay() }
                         .border(1.dp, AuraTheme.colors.accentBrand, RoundedCornerShape(14.dp)),
                     colors = CardDefaults.cardColors(containerColor = AuraTheme.colors.cardBackground),
                     shape = RoundedCornerShape(14.dp)
@@ -385,6 +386,18 @@ fun TasksScreen(
                                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                                 ) {
                                     Text("RESET", fontSize = 9.sp, color = AuraTheme.colors.textPrimary, fontWeight = FontWeight.Bold)
+                                }
+
+                                OutlinedButton(
+                                    onClick = {
+                                        AuraHaptics.triggerSelection(view)
+                                        viewModel.showFocusOverlay()
+                                    },
+                                    border = BorderStroke(1.dp, AuraTheme.colors.accentBrand.copy(alpha = 0.5f)),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text("EXPAND ⚡", fontSize = 9.sp, color = AuraTheme.colors.accentBrand, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -515,7 +528,7 @@ fun TasksScreen(
                 Button(
                     onClick = {
                         val mins = selectedTimerMinutes.toIntOrNull() ?: 25
-                        taskToTime?.let { viewModel.startTaskTimer(it.id, mins) }
+                        taskToTime?.let { viewModel.startFocus(it, mins) }
                         taskToTime = null
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = AuraTheme.colors.accentBrand)
