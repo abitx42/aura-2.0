@@ -2,7 +2,28 @@
 
 **Last Updated:** 2026-09-08  
 **Repository Branch:** `main`  
-**Current Milestone:** Milestone 2.5 Complete — Architectural Foundation Repair & Security Hardening (Phase 2A–2D)
+**Current Milestone:** Milestone 2.5 Complete — Architectural Foundation Repair & Security Hardening  
+**Canonical Repair Record:** [`docs/status/MILESTONE_2_5_FOUNDATION_REPAIR.md`](MILESTONE_2_5_FOUNDATION_REPAIR.md)
+
+---
+
+## 0. Aura 2.0 Mental State Matrix
+
+```text
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Documentation:        🟢 Strong (Canonical docs & ADRs in docs/)
+Product Vision:       🟢 Defined (PRD, vertical slices)
+Architecture:         🟢 Defined (PostgreSQL + Fastify + Room)
+Foundation Repair:    🟢 Implemented (Phases 2A - 2D complete)
+Backend Tests:        🟢 Passing (100% test pass on auth/plans/sync/actions)
+Backend Build:        🟢 Passing (0 tsc errors)
+Database Migration:   🟢 Incremental Runner (001, 002)
+Android Build:        🟡 Wrapper & scripts verified (Local SDK required for full APK assembly)
+Real Offline E2E:     🟡 Offline-first queue verified; ready for staging device test
+
+NEXT: Milestone 3 — Core Daily Loop
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
 
 ---
 
