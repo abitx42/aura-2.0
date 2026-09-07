@@ -1,0 +1,6 @@
+{
+  "name": "Aura Notes",
+  "description": "A premium digital notebook and unified high-performance productivity workspace featuring rich-text editing, daily journaling, drawings, tasks with Kanban/Calendar views, and habit tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
