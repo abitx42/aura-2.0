@@ -118,6 +118,7 @@ fun AuraErrorBoundary(
         CompositionLocalProvider(
             LocalErrorReporter provides { err ->
                 AuraCrashHandler.logEvent("UI_ERROR", "${err.javaClass.simpleName}: ${err.message}")
+                com.example.util.AuraSessionTimeline.record("UI_BOUNDARY_TRIGGERED", "${err.javaClass.simpleName}: ${err.message?.take(50)}")
                 caughtError = err
             }
         ) {

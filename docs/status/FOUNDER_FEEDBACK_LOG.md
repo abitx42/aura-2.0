@@ -8,6 +8,41 @@
 
 ---
 
+## 🎯 Phase 2 Exit Criteria Checklist
+
+Before Phase 3 (Universal Frictionless Capture) can be unlocked, all 10 criteria must be satisfied:
+
+```text
+PHASE 2 EXIT GATES
+
+[ ] 1. Aura used as daily driver for at least 7 consecutive days
+[ ] 2. Complete daily loop repeated and verified multiple times
+[ ] 3. Zero critical crashes (AuraCrashHandler remains clean)
+[ ] 4. Offline queue successfully accumulated and drained after reconnection
+[ ] 5. Night Review completed honestly and bridged to tomorrow's plan
+[ ] 6. Lock Tomorrow 🔒 → Morning Kickoff ☀️ → Active transition verified
+[ ] 7. Focus timer tested during backgrounding (monotonic clock invariance verified)
+[ ] 8. Founder friction observations logged and triaged
+[ ] 9. Critical UX blockers resolved
+[ ] 10. Zero data-loss bugs across Room SQLite and Fastify PostgreSQL
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ALL CONDITIONS MET  ──→  PHASE 3 UNLOCKED 🔓
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+---
+
+## 🧭 The 3-Category Feedback Framework
+
+When evaluating Aura throughout the day, categorize observations into:
+
+1. 🔴 **Bugs** (`BUG`): *Something broke or threw an error.*
+2. 🟡 **Friction** (`FRICTION`): *Something works, but I don't want to use it or it feels clunky.*
+3. 🔵 **Missing Expectation** (`EXPECTATION`): *I naturally expected Aura to do something here, but it didn't.*
+
+---
+
 ## 📅 14-Day Daily Loop Verification Checklist
 
 | Day | Date | Plan Locked? 🔒 | Morning Kickoff? ☀️ | Focus Executed? ⚡ | Night Review? 🌙 | Sync Verified? 🔄 | Notes / Rating |
@@ -29,13 +64,14 @@
 
 ---
 
-## 🚨 Founder Friction & Bug Triage Log
+## 🚨 Founder Observations & Triage Log
 
-*Record any friction, awkward animations, unexpected behavior, sync delays, or crashes below. You can also submit these directly in the in-app Debug Screen.*
+*Record observations using the 3 categories (🔴 Bug, 🟡 Friction, 🔵 Missing Expectation).*
 
-| ID | Timestamp | Severity (P0/P1/P2) | Area / Screen | Observed Friction / Bug | Expected Behavior | Status |
+| ID | Timestamp | Category | Area / Screen | Observed Friction / Bug / Expectation | Expected Behavior | Status |
 | :---: | :---: | :---: | :---: | :--- | :--- | :---: |
-| *e.g.* `FB-01` | *2026-09-08* | *P1* | *Focus Timer* | *Screen locked, audio chime was quiet* | *Clear vibration/chime on completion* | *Open* |
+| `FB-01` | *2026-09-08* | 🟡 Friction | Focus Timer | *Screen locked, chime was quiet* | *Prominent haptic pulse on timer end* | *Open* |
+| `FB-02` | *2026-09-08* | 🔵 Expectation | Plan Tomorrow | *Expected quick reorder via drag* | *Simple up/down arrow or drag handles* | *Open* |
 
 ---
 
@@ -43,10 +79,12 @@
 
 ### Day 1 (2026-09-08)
 - **App Version Tested:** 2.0.0 (Debug APK)
+- **Application ID:** `com.aura.personalos`
 - **Device:** Physical Android phone
 - **Observations:**
   - Installed via `adb install -r android/app/build/outputs/apk/debug/app-debug.apk`.
-  - Debug screen accessible via Security Settings.
+  - Debug console accessible via `Settings` $\longrightarrow$ `FOUNDER DIAGNOSTICS & DEBUG 🛠️`.
+  - Session event timeline records lifecycle and interaction events.
 - **Friction Points:**
 - **Improvements Needed:**
 
@@ -54,8 +92,15 @@
 
 ## 🛠️ Diagnostics & Forensic Instructions
 
-If the app ever crashes or encounters a visual glitch:
-1. **In-App Logs**: Open `Settings` $\longrightarrow$ `Founder Debug Tools 🛠️` $\longrightarrow$ inspect `Recent Life Events & Logs`.
-2. **Crash Log File**: Stored locally on phone at:
-   `/data/data/com.example/files/aura_crash_log.txt`
-3. **Capture Friction**: In `Founder Debug Tools 🛠️`, enter text under `Founder Friction Note` and tap `Save Note` to log immediately.
+1. **In-App Session Timeline**: Open `Settings` $\longrightarrow$ `FOUNDER DIAGNOSTICS & DEBUG 🛠️` $\longrightarrow$ inspect `📜 SESSION EVENT TIMELINE`.
+2. **Crash Log File**: Stored locally on device at:
+   `/data/data/com.aura.personalos/files/aura_crash_log.txt`
+3. **Capture Friction**: In `FOUNDER DIAGNOSTICS & DEBUG 🛠️`, enter text under `RECORD FOUNDER FRICTION NOTE` and tap `SAVE NOTE 💾`.
+4. **Physical Device Launch Commands**:
+   ```bash
+   # Install debug APK
+   adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+
+   # Launch directly via verified component name:
+   adb shell am start -n com.aura.personalos/com.example.MainActivity
+   ```

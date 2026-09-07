@@ -54,26 +54,33 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val isSimulatedOffline: StateFlow<Boolean> = _isSimulatedOffline
 
     fun toggleSimulatedOffline() {
+        if (!com.example.BuildConfig.DEBUG) return
         _isSimulatedOffline.value = !_isSimulatedOffline.value
         AuraCrashHandler.logEvent("DEBUG", "Simulated offline toggled: ${_isSimulatedOffline.value}")
+        com.example.util.AuraSessionTimeline.record("SIMULATED_OFFLINE", "enabled=${_isSimulatedOffline.value}")
     }
 
     fun clearPendingOperationsQueue() {
+        if (!com.example.BuildConfig.DEBUG) return
         viewModelScope.launch {
             repository.clearAllPendingOperations()
             AuraCrashHandler.logEvent("DEBUG", "Pending operations queue purged by founder")
+            com.example.util.AuraSessionTimeline.record("SYNC_QUEUE_PURGED")
         }
     }
 
     fun resetTodayPlan() {
+        if (!com.example.BuildConfig.DEBUG) return
         viewModelScope.launch {
             val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
             repository.resetPlanForDate(todayStr)
             AuraCrashHandler.logEvent("DEBUG", "Today's plan reset for $todayStr")
+            com.example.util.AuraSessionTimeline.record("PLAN_RESET", "date=$todayStr")
         }
     }
 
     fun populateFounderSampleDay() {
+        if (!com.example.BuildConfig.DEBUG) return
         viewModelScope.launch {
             val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
             val sampleTasks = listOf(
@@ -91,6 +98,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             lockTomorrowPlan(orderedTasks = createdTasks, reason = "Founder testing sample day")
             startMyDay()
             AuraCrashHandler.logEvent("DEBUG", "Populated founder sample day with 3 tasks and active plan")
+            com.example.util.AuraSessionTimeline.record("SAMPLE_DAY_POPULATED", "tasks=3")
         }
     }
 

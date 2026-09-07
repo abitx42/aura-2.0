@@ -47,6 +47,7 @@ fun DebugScreen(
     val notes by viewModel.activeNotes.collectAsState()
     val habits by viewModel.habits.collectAsState()
     val transactions by viewModel.allTransactions.collectAsState()
+    val timelineEvents by com.example.util.AuraSessionTimeline.events.collectAsState()
 
     var frictionNoteInput by remember { mutableStateOf("") }
     var noteSavedFeedback by remember { mutableStateOf(false) }
@@ -398,7 +399,97 @@ fun DebugScreen(
                 }
             }
 
-            // 7. Live Events & Crash Forensics
+            // 7. Session Event Timeline
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = AuraTheme.colors.cardBackground),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "📜 SESSION EVENT TIMELINE (${timelineEvents.size})",
+                                color = AuraTheme.colors.accentBrand,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                            TextButton(onClick = { com.example.util.AuraSessionTimeline.clear() }) {
+                                Text("CLEAR", fontSize = 10.sp, color = AuraTheme.colors.textMuted)
+                            }
+                        }
+                        Text(
+                            text = "Redacted chronological log of user interactions and sync events:",
+                            color = AuraTheme.colors.textSecondary,
+                            fontSize = 11.sp
+                        )
+
+                        Surface(
+                            color = AuraTheme.colors.screenBackground,
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 180.dp)
+                        ) {
+                            LazyColumn(
+                                modifier = Modifier.padding(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                if (timelineEvents.isEmpty()) {
+                                    item {
+                                        Text("No session events recorded yet.", color = AuraTheme.colors.textMuted, fontSize = 10.sp)
+                                    }
+                                } else {
+                                    items(timelineEvents) { event ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Text(
+                                                text = event.timestamp,
+                                                color = AuraTheme.colors.textMuted,
+                                                fontSize = 9.sp,
+                                                fontFamily = FontFamily.Monospace
+                                            )
+                                            Text(
+                                                text = event.type,
+                                                color = when {
+                                                    event.type.contains("ERROR") || event.type.contains("FAILED") -> AuraTheme.colors.negativeRed
+                                                    event.type.contains("LOCKED") || event.type.contains("COMPLETED") || event.type.contains("SUCCESS") -> AuraTheme.colors.positiveGreen
+                                                    event.type.contains("START") || event.type.contains("OPENED") -> AuraTheme.colors.accentBrand
+                                                    else -> AuraTheme.colors.textPrimary
+                                                },
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = FontFamily.Monospace
+                                            )
+                                            if (!event.details.isNullOrBlank()) {
+                                                Text(
+                                                    text = event.details,
+                                                    color = AuraTheme.colors.textSecondary,
+                                                    fontSize = 9.sp,
+                                                    fontFamily = FontFamily.Monospace,
+                                                    maxLines = 1
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 8. Live Events & Crash Forensics
             item {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = AuraTheme.colors.cardBackground),

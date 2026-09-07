@@ -73,8 +73,18 @@ Premium Aura Brain & Monetization
 - 📝 Log UX friction in [`docs/status/FOUNDER_FEEDBACK_LOG.md`](../status/FOUNDER_FEEDBACK_LOG.md).
 - 🛠️ Utilize in-app **Debug Screen** for queue inspection, time travel, and crash log diagnostics.
 
-### Success Gate:
-- **7–14 consecutive days** of active planning, locking, executing, and night reviews with zero data loss and zero fatal crashes.
+### Phase 2 Objective Exit Criteria (Gating Phase 3):
+Before Phase 3 can be unlocked, all 10 objective criteria must be met and checked off in [`docs/status/FOUNDER_FEEDBACK_LOG.md`](../status/FOUNDER_FEEDBACK_LOG.md):
+1. **Daily Driver Usage**: Aura used consistently for at least 7 consecutive days.
+2. **Loop Repetition**: Complete daily loop executed multiple times (Plan $\to$ Lock $\to$ Kickoff $\to$ Focus $\to$ Review).
+3. **Zero Critical Crashes**: `AuraCrashHandler` verifies zero unhandled fatal exceptions.
+4. **Offline Queue Recovery**: Offline mutation batches accumulated and safely drained upon reconnection.
+5. **Night Review Integrity**: Night review completed honestly with task reconciliations bridged to tomorrow.
+6. **Lock $\to$ Active Transition**: Lock Tomorrow 🔒 $\to$ Morning Kickoff ☀️ $\to$ Active transition verified on real phone.
+7. **Background Timer Invariance**: Focus countdown verified during phone sleep (monotonic elapsed invariance).
+8. **3-Category Feedback Triaged**: Founder observations logged into 🔴 Bugs, 🟡 Friction, and 🔵 Missing Expectations.
+9. **Critical UX Blockers Fixed**: All P0/P1 friction points resolved.
+10. **Zero Data Loss**: Database records between Room SQLite and Fastify PostgreSQL strictly preserved.
 
 ---
 
