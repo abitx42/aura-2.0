@@ -46,6 +46,56 @@ When evaluating Aura throughout the day, categorize observations into:
 
 ---
 
+## 📋 Founder Test Baseline (Day 1 Starting State)
+
+To guarantee reliable longitudinal comparison between **Day 1**, **Day 7**, and **Day 14**, this baseline records the exact initial environment:
+
+```text
+FOUNDER BASELINE — DAY 1 START
+
+Date:                         2026-09-08
+Tester:                       Aadi (Founder)
+Aura Version:                 2.0.0
+Git Commit:                   59c4d8b (origin/main)
+OS Application ID:            com.aura.personalos
+Gradle Namespace:             com.aura.personalos
+Launcher Activity:            com.aura.personalos.MainActivity
+
+Fresh Install (Option A):     YES (Clean install, old packages removed)
+Initial Room Database State:
+  - Tasks:                    0
+  - Daily Plans:              0
+  - Daily Plan Items:         0
+  - Pending Operations:       0
+  - Notes:                    0
+  - Habits:                   0
+
+Fastify Backend State:
+  - Connected:                YES (Sync endpoint /api/v1/sync ready)
+  - Database:                 PostgreSQL (schema v2.0 aligned)
+
+Known Pre-Test Issues:        NONE (41/41 unit tests pass, 100% offline E2E pass)
+Evaluation Gates:             Day 7 (Week 1 Gate) | Day 14 (Phase 2 Exit Gate)
+```
+
+### Clean Installation Procedure (Recommended ⭐)
+
+To purge any legacy artifacts from `com.example` and start with an authentic clean-slate database:
+
+```bash
+# 1. Remove legacy package artifacts (if present)
+adb uninstall com.example
+adb uninstall com.aura.personalos
+
+# 2. Install freshly verified unified APK (20 MB)
+adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+
+# 3. Launch Aura 2.0
+adb shell am start -n com.aura.personalos/.MainActivity
+```
+
+---
+
 ## 📅 14-Day Daily Loop Verification Checklist
 
 | Day | Date | Plan Locked? 🔒 | Morning Kickoff? ☀️ | Focus Executed? ⚡ | Night Review? 🌙 | Sync Verified? 🔄 | Notes / Rating |
