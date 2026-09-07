@@ -214,4 +214,25 @@
   - Generates structured, authentic historical datasets for future Insight Engine pattern discovery.
   - Prevents stale task accumulation and planning anxiety.
 
+---
 
+### ADR-014: Deterministic Offline Reliability Gates & Tombstone Preservation Rules
+- **Status:** Accepted (Milestone 3F)
+- **Context:**
+  - Invariant 4 mandates that Aura 2.0 functions 100% offline. A network error or power loss must never discard user work.
+  - In real-world usage, 5 failure modes jeopardize personal operating systems:
+    1. Operating completely offline for days and accumulating multi-entity batches.
+    2. Network dropping mid-request (after server write or before client receives ACK).
+    3. The OS killing the app process in background while offline mutations are pending.
+    4. Distorted timer calculations caused by manual time adjustments or timezone changes during backgrounding.
+    5. Zombie task resurrection where Device A deletes a task and Device B (working offline) edits it before syncing.
+- **Decision:**
+  - **Gate 1 (Completely Offline Accumulation & Drain)**: Local Room SQLite database processes all mutations immediately in $<16\text{ms}$ and writes a `PendingOperation` record. On network reconnection, `AuraSyncManager` batches up to 20 operations to `POST /api/v1/sync/push`. The cloud transaction commits atomically, returns `committedOperations`, and Room deletes only confirmed records.
+  - **Gate 2 (Mid-Sync Drop & Idempotent Retry)**: If a sync request fails or times out, client-side operations are **never** dropped from `pending_operations`. The `retryCount` is incremented. On reconnection, operations are retried with identical client UUIDs (`operationId`). The Fastify backend checks `processed_sync_operations`; if already processed, the duplicate write is skipped, and an ACK is returned, guaranteeing exactly-once semantics.
+  - **Gate 3 (Process Kill Persistence)**: The `pending_operations` table is backed by durable SQLite disk storage. Process termination does not affect queued operations. Upon process restart, pending mutations remain queued and drain immediately when connectivity permits.
+  - **Gate 4 (Monotonic Clock Telemetry)**: Real-time focus countdowns and elapsed times use `android.os.SystemClock.elapsedRealtime()`. Elapsed calculations remain invariant against wall-clock changes, NTP synchronization, or timezone jumps.
+  - **Gate 5 (Tombstone Preservation & Anti-Resurrection)**: Deletions are soft-deletes (`deleted_at = NOW()`). If an offline client pushes an `INSERT` or `UPDATE` for an entity with `deleted_at IS NOT NULL`, the backend refuses to resurrect the record, while acknowledging the operation in `committedOperations` so the client purges the stale pending operation.
+- **Consequences:**
+  - Zero data loss under intermittent networks, cellular drops, or process kills.
+  - Prevents deleted tasks from mysteriously reappearing.
+  - Establishes automated regression verification covering all 5 scenarios in `backend/test/offline_e2e.test.ts`.

@@ -962,7 +962,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _reviewImpactFactors.value = emptySet()
         _reviewNotes.value = ""
         // Pre-populate reconciliations: all incomplete items default to MOVE_TOMORROW
-        val currentTasks = allTasks.value.filter { it.date == todayString && !it.isDone && !it.isDeleted }
+        val currentTasks = allTasks.value.filter { it.date == todayString && !it.isCompleted && !it.isDeleted }
         val initialMap = mutableMapOf<Int, Pair<String, String?>>()
         for (t in currentTasks) {
             initialMap[t.id] = Pair("MOVE_TOMORROW", null)

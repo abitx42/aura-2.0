@@ -3,6 +3,7 @@ import { runAuthTests } from './auth.test.js';
 import { runPlansTests } from './plans.test.js';
 import { runSyncTests } from './sync.test.js';
 import { runActionsTests } from './actions.test.js';
+import { runOfflineE2ETests } from './offline_e2e.test.js';
 
 async function runTests() {
   console.log('🧪 Running Aura 2.0 Backend Tests...');
@@ -65,7 +66,10 @@ async function runTests() {
   await runSyncTests();
   await runActionsTests();
 
-  console.log('🎉 All backend verification test suites passed successfully!');
+  // Milestone 3F Real Offline E2E Reliability Verification
+  await runOfflineE2ETests();
+
+  console.log('🎉 All backend and offline verification test suites passed successfully!');
   process.exit(0);
 }
 

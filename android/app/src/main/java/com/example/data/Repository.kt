@@ -403,7 +403,7 @@ class AppRepository(val db: AppDatabase, val context: Context? = null) {
             if (task != null) {
                 when (rec.action) {
                     "MOVE_TOMORROW" -> {
-                        val updatedTask = task.copy(date = tomorrowDate, updatedAt = now)
+                        val updatedTask = task.copy(date = tomorrowDate)
                         taskDao.updateTask(updatedTask)
                         pendingDao.insert(PendingOperation(
                             entityType = "TASK",
@@ -413,7 +413,7 @@ class AppRepository(val db: AppDatabase, val context: Context? = null) {
                         ))
                     }
                     "RESCHEDULE" -> {
-                        val updatedTask = task.copy(time = null, updatedAt = now)
+                        val updatedTask = task.copy(time = null)
                         taskDao.updateTask(updatedTask)
                         pendingDao.insert(PendingOperation(
                             entityType = "TASK",
@@ -423,7 +423,7 @@ class AppRepository(val db: AppDatabase, val context: Context? = null) {
                         ))
                     }
                     "CANCEL" -> {
-                        val updatedTask = task.copy(isDeleted = true, updatedAt = now)
+                        val updatedTask = task.copy(isDeleted = true)
                         taskDao.updateTask(updatedTask)
                         pendingDao.insert(PendingOperation(
                             entityType = "TASK",

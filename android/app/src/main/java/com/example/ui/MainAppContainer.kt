@@ -3836,61 +3836,14 @@ fun AppSecuritySettingsScreen(
     var isEditingProfile by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
-    val googleSignInLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult(),
-        onResult = { result ->
-            val intent = result.data
-            if (intent != null) {
-                try {
-                    val task = com.google.android.gms.auth.api.signin.GoogleSignIn.getSignedInAccountFromIntent(intent)
-                    val account = task.getResult(com.google.android.gms.common.api.ApiException::class.java)
-                    val idToken = account?.idToken
-                    if (idToken != null) {
-                        viewModel.signInWithGoogleReal(idToken) { success ->
-                            // real Google Sign-In succeeded
-                        }
-                    } else {
-                        account?.email?.let { email ->
-                            viewModel.signInWithGoogle(email)
-                        }
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-        }
-    )
-
     if (showGoogleSignDialogInSettings) {
-        var tempEmailInput by remember { mutableStateOf(userEmail ?: "moreaboutastram@gmail.com") }
+        var tempEmailInput by remember { mutableStateOf(userEmail ?: "user@aura.local") }
         AlertDialog(
             onDismissRequest = { showGoogleSignDialogInSettings = false },
-            title = { Text("CONNECT GOOGLE WORKSPACE ACCOUNT", color = AuraTheme.colors.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold) },
+            title = { Text("CLOUD SYNC PROFILE", color = AuraTheme.colors.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Select your authorization pathway for secure Cloud database synchronization & multi-device backup indexing:", color = AuraTheme.colors.textSecondary, fontSize = 11.sp, lineHeight = 15.sp)
-                    
-                    // Real Connection Button
-                    Button(
-                        onClick = {
-                            try {
-                                val intent = viewModel.authManager.getSignInIntent()
-                                googleSignInLauncher.launch(intent)
-                                showGoogleSignDialogInSettings = false
-                            } catch (e: Exception) {
-                                // fall back to standard text field input if services not loaded
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = AuraTheme.colors.accentBrand),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.CloudSync, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("SIGN IN WITH GOOGLE", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-
-                    Text("Or configure simulated email identification below:", color = AuraTheme.colors.textSecondary, fontSize = 10.sp)
+                    Text("Configure your account email for cloud database synchronization and multi-device backup indexing:", color = AuraTheme.colors.textSecondary, fontSize = 11.sp, lineHeight = 15.sp)
 
                     OutlinedTextField(
                         value = tempEmailInput,
@@ -3903,7 +3856,7 @@ fun AppSecuritySettingsScreen(
                             focusedTextColor = AuraTheme.colors.textPrimary,
                             unfocusedTextColor = AuraTheme.colors.textPrimary
                         ),
-                        placeholder = { Text("example@gmail.com", color = AuraTheme.colors.textMuted) }
+                        placeholder = { Text("user@aura.local", color = AuraTheme.colors.textMuted) }
                     )
                 }
             },

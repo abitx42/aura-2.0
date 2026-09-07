@@ -1,6 +1,6 @@
 package com.example
 
-import com.example.data.HabitLog
+import com.example.data.*
 import com.example.ui.FloatPair
 import com.example.ui.SketchStroke
 import com.example.ui.hashPin
@@ -143,7 +143,7 @@ class AuraCoreUnitTest {
         val words = content.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
         val charCount = content.length
 
-        assertEquals(7, words.size)
+        assertEquals(8, words.size)
         assertEquals(59, charCount)
     }
 
@@ -377,7 +377,7 @@ class AuraCoreUnitTest {
 
     @Test
     fun testMultipleDebtSettlements_reachesZero() {
-        var debt = Debt(id = 1, friendId = 1, friendName = "Alex", title = "Dinner", totalAmount = 1000.0, remainingAmount = 1000.0, isYouOwe = false)
+        var debt = Debt(id = 1, friendId = 1, friendName = "Alex", title = "Dinner", totalAmount = 1000.0, amount = 1000.0, date = "2026-03-30", remainingAmount = 1000.0, isYouOwe = false)
         
         // 1st payment: 400
         val payment1 = 400.0

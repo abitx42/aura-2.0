@@ -26,8 +26,6 @@ class MainActivity : ComponentActivity() {
     AuraErrorHandler.install(this)
     // Configure optimized image loader
     Coil.setImageLoader(AuraImageLoader.getInstance(this))
-    // Initialize Firebase if not already initialized
-    AuraApplication.ensureFirebaseInitialized(this)
 
     enableEdgeToEdge()
     setContent {

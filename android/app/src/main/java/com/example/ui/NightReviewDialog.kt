@@ -29,7 +29,7 @@ import com.example.ui.theme.AuraTheme
 import java.text.SimpleDateFormat
 import java.util.*
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun NightReviewDialog(
     viewModel: AppViewModel,
@@ -41,8 +41,9 @@ fun NightReviewDialog(
     val reviewNotes by viewModel.reviewNotes.collectAsState()
     val reconciliations by viewModel.itemReconciliations.collectAsState()
 
-    val todayTasks by viewModel.todayTasks.collectAsState()
+    val allTasks by viewModel.allTasks.collectAsState()
     val todayPlanItems by viewModel.todayPlanItems.collectAsState()
+    val todayString = viewModel.todayString
 
     // Deterministic facts calculated via Room data
     val totalPlanned = todayPlanItems.size
@@ -57,7 +58,7 @@ fun NightReviewDialog(
     }
 
     // Incomplete tasks scheduled for today
-    val incompleteTasks = todayTasks.filter { !it.isDone && !it.isDeleted }
+    val incompleteTasks = allTasks.filter { it.date == todayString && !it.isCompleted && !it.isDeleted }
 
     val todayFormatted = remember {
         SimpleDateFormat("EEEE, dd MMM yyyy", Locale.US).format(Date())
