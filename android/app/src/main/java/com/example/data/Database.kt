@@ -541,6 +541,9 @@ interface DailyPlanDao {
     @Query("UPDATE daily_plans SET status = 'LOCKED', lockedAt = :lockedAt, lockReason = :reason, updatedAt = :lockedAt WHERE planDate = :date")
     suspend fun lockPlan(date: String, lockedAt: Long, reason: String? = null)
 
+    @Query("UPDATE daily_plans SET status = :status, updatedAt = :updatedAt WHERE planDate = :date")
+    suspend fun updatePlanStatus(date: String, status: String, updatedAt: Long = System.currentTimeMillis())
+
     @Query("SELECT * FROM daily_plan_items WHERE planDate = :date ORDER BY sortOrder ASC")
     fun getPlanItemsForDate(date: String): Flow<List<DailyPlanItem>>
 

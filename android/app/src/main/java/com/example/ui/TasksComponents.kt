@@ -1799,7 +1799,7 @@ fun PlanTomorrowScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.unlockOrAdaptTomorrowPlan(adaptReasonText.ifBlank { "Plan adapted by user" })
+                        viewModel.adaptTomorrowPlan(tomorrowTasks, adaptReasonText.ifBlank { "Plan adapted by user" })
                         showAdaptPlanDialog = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = AuraTheme.colors.accentBrand),

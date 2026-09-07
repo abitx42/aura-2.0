@@ -837,11 +837,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val isTodayLocked: StateFlow<Boolean> = todayPlan
-        .map { it?.status == "LOCKED" }
+        .map { it?.status == "LOCKED" || it?.status == "ACTIVE" || it?.status == "MODIFIED" }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val isTomorrowLocked: StateFlow<Boolean> = tomorrowPlan
-        .map { it?.status == "LOCKED" }
+        .map { it?.status == "LOCKED" || it?.status == "MODIFIED" }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     fun lockTomorrowPlan(orderedTasks: List<Task>, reason: String? = null) {
@@ -884,6 +884,26 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
             repository.saveDailyPlan(draftPlan, planItems)
+        }
+    }
+
+    fun adaptTomorrowPlan(orderedTasks: List<Task>, reason: String) {
+        viewModelScope.launch {
+            val planItems = orderedTasks.mapIndexed { index, task ->
+                DailyPlanItem(
+                    planDate = tomorrowString,
+                    taskId = task.id,
+                    taskSyncId = task.syncId,
+                    sortOrder = index,
+                    scheduledStart = task.time,
+                    durationMinutes = 30
+                )
+            }
+            repository.adaptDailyPlan(
+                date = tomorrowString,
+                reason = reason,
+                updatedItems = planItems
+            )
         }
     }
 

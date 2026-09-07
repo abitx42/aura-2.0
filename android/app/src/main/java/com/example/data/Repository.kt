@@ -266,9 +266,9 @@ class AppRepository(val db: AppDatabase, val context: Context? = null) {
         val now = System.currentTimeMillis()
         val existing = dailyPlanDao.getPlanForDateSync(date)
         val planToLock = if (existing != null) {
-            existing.copy(status = "LOCKED", lockedAt = now, lockReason = reason, updatedAt = now)
+            existing.copy(status = "LOCKED", lockedAt = now, lockReason = reason, updatedAt = now, version = existing.version + 1)
         } else {
-            DailyPlan(planDate = date, status = "LOCKED", lockedAt = now, lockReason = reason)
+            DailyPlan(planDate = date, status = "LOCKED", lockedAt = now, lockReason = reason, createdAt = now, updatedAt = now)
         }
         dailyPlanDao.insertPlan(planToLock)
         if (orderedItems.isNotEmpty()) {
@@ -282,6 +282,53 @@ class AppRepository(val db: AppDatabase, val context: Context? = null) {
             payload = planToJson(planToLock)
         ))
         triggerSync()
+    }
+
+    suspend fun adaptDailyPlan(
+        date: String,
+        reason: String,
+        updatedItems: List<DailyPlanItem> = emptyList()
+    ) = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        val existing = dailyPlanDao.getPlanForDateSync(date)
+        val planToAdapt = if (existing != null) {
+            existing.copy(
+                status = "MODIFIED",
+                lockReason = reason,
+                updatedAt = now,
+                version = existing.version + 1
+            )
+        } else {
+            DailyPlan(planDate = date, status = "MODIFIED", lockReason = reason, createdAt = now, updatedAt = now)
+        }
+        dailyPlanDao.insertPlan(planToAdapt)
+        if (updatedItems.isNotEmpty()) {
+            dailyPlanDao.deletePlanItemsForDate(date)
+            dailyPlanDao.insertPlanItems(updatedItems)
+        }
+        pendingDao.insert(PendingOperation(
+            entityType = "PLAN",
+            operationType = "UPDATE",
+            entitySyncId = planToAdapt.syncId,
+            payload = planToJson(planToAdapt)
+        ))
+        triggerSync()
+    }
+
+    suspend fun activateDailyPlan(date: String) = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        val existing = dailyPlanDao.getPlanForDateSync(date)
+        if (existing != null && (existing.status == "LOCKED" || existing.status == "MODIFIED")) {
+            val activePlan = existing.copy(status = "ACTIVE", updatedAt = now, version = existing.version + 1)
+            dailyPlanDao.insertPlan(activePlan)
+            pendingDao.insert(PendingOperation(
+                entityType = "PLAN",
+                operationType = "UPDATE",
+                entitySyncId = activePlan.syncId,
+                payload = planToJson(activePlan)
+            ))
+            triggerSync()
+        }
     }
 
     suspend fun addSubtask(subtask: Subtask) = withContext(Dispatchers.IO) {

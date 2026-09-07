@@ -96,3 +96,38 @@
 - **Consequences**:
   - Protects user privacy while providing high-leverage contextual assistance.
   - Complies with Google Play developer policies.
+
+---
+
+## ADR-009: Daily Plan Lifecycle & Intentionality Audit Trail
+
+- **Context**: Daily planning requires intentional commitment without being brittle. Life changes; users get sick, meetings get scheduled, and energy fluctuates. If locking tomorrow makes the plan completely immutable, users will stop locking plans or abandon the app. Conversely, if plans can be silently altered without recording what changed, accountability is destroyed.
+- **Decision**: 
+  1. Formalize a 4-state lifecycle for daily plans:
+     $$\text{DRAFT} \longrightarrow \text{LOCKED} \longrightarrow \text{ACTIVE} \longrightarrow \text{REVIEWED}$$
+  2. Locking records `status = 'LOCKED'` and an immutable `locked_at` server timestamp.
+  3. When an active or locked plan is modified, the change is **never silently overwritten**. Aura records a `PLAN_MODIFIED` event into `life_events` (`domain = 'PLANNING'`), capturing the task ID, previous scheduled time, new scheduled time, user reason, and modification timestamp.
+- **Consequences**:
+  - Upholds Aura's philosophy: *"Strict about intentionality, flexible about reality."*
+  - Provides the Insight Engine with authentic behavioral data on rescheduling habits, time estimation accuracy, and procrastination patterns without creating redundant audit tables.
+- **Rejected Alternatives**:
+  - *Hard Immutable Lock*: Rejected because users inevitably face unexpected events.
+  - *Silent Overwrite*: Rejected because it destroys accountability and erases historical intent.
+
+---
+
+## ADR-010: Plan Load Model vs Magic Number Thresholds & Task Due Date Separation
+
+- **Context**: 
+  1. Alerting when planned tasks exceed a fixed 10-hour threshold works as a crude MVP heuristic, but fails to account for diverse lifestyles (e.g. students with 6 hours of classes vs full-time professionals vs weekend days).
+  2. In task management, moving a task to tomorrow frequently conflates the task's external deadline with the user's intended execution block.
+- **Decision**:
+  1. Separate `Task.due_date` (the contractual/external deadline) from `DailyPlanItem.plan_date` & `scheduled_start` (the user's intentional execution slot). Scheduling a task into a plan never modifies its underlying creation or deadline metadata.
+  2. Replace arbitrary universal limits with the **Plan Load %** model:
+     $$\text{Realistic Flexible Time} = \text{Waking Window} - \text{Fixed Commitments} - \text{Personal Buffer}$$
+     $$\text{Plan Load \%} = \frac{\text{Total Planned Work}}{\text{Realistic Flexible Time}}$$
+  3. Aura warns users dynamically when $\text{Plan Load} \ge 85\%$ (*Tight Day*) or $\ge 100\%$ (*Overcommitted*), tailored to their personal schedule.
+- **Consequences**:
+  - Clean separation of task deadlines vs daily scheduling.
+  - Personalized time budgeting that scales across any lifestyle baseline.
+

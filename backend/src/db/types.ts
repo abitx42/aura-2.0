@@ -53,7 +53,7 @@ export interface DailyPlanRecord {
   id: string;
   user_id: string;
   plan_date: string; // YYYY-MM-DD
-  status: 'DRAFT' | 'LOCKED' | 'MODIFIED' | 'COMPLETED';
+  status: 'DRAFT' | 'LOCKED' | 'ACTIVE' | 'REVIEWED' | 'MODIFIED' | 'ARCHIVED';
   locked_at: string | null;
   lock_reason: string | null;
   version: number;
