@@ -1,0 +1,38 @@
+# OS Metadata
+.DS_Store
+Thumbs.db
+
+# IDE & Editors
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# Android / Gradle
+.gradle/
+build/
+app/build/
+*.apk
+*.aab
+local.properties
+.cxx/
+captures/
+
+# Node / Backend
+node_modules/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.env
+.env.local
+.env.production
+
+# Secrets & Service Accounts
+google-services.json
+firebase-adminsdk*.json
+service-account*.json
+*.keystore
+*.jks
