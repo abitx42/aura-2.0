@@ -287,3 +287,46 @@
   - 100% of unit tests passing (41/41) under the unified namespace.
   - Zero namespace divergence before physical device testing commences.
 
+---
+
+### ADR-017: Pure Aura 2.0 Architectural Slate & Complete Elimination of Legacy Aura Notes Baggage
+- **Status:** Accepted & Executed (ADR-017)
+- **Context:**
+  - Aura was originally seeded from an experimental "Aura Notes" starter codebase that contained over 18,000 lines of legacy CRUD: Note editors, Rich drawing canvas (`DrawingCanvas.kt`), Split-bill calculators & debt ledgers (`MoneyComponents.kt`), Audio voice memos (`AudioController.kt`), PIN lock security screens, and floating robot toy companions (`AuraRobotCompanion.kt`).
+  - While the backend (`backend/`) was built 100% from scratch for Aura 2.0 (Fastify, PostgreSQL, Life Events, Proposed Actions), the Android client was carrying legacy Room tables, models, and navigation sections that violated the core identity of Aura 2.0 as a focused **Personal Operating System**.
+  - User Directive: *"start from zero dont add anything from old aura aura 2.0 is completly new , new ai , new brain"*.
+- **Decision:**
+  1. **100% Zero-Legacy Code Elimination**:
+     - Permanently removed legacy files via `git rm`:
+       - `MoneyComponents.kt` (-4,545 lines)
+       - `NotesComponents.kt` (-756 lines)
+       - `DrawingCanvas.kt` (-252 lines)
+       - `ClockWidget.kt` (-160 lines)
+       - `AudioController.kt` (-105 lines)
+       - `JournalCalendarComponents.kt`
+       - `SectionInfoButton.kt`
+       - `AuraTabIndicator.kt`
+       - `AuraRobotCompanion.kt`
+     - Total legacy reduction: 18,353 deleted lines across 9 legacy files.
+  2. **Pristine Room Database Schema (`Database.kt`)**:
+     - Stripped from 18 mixed entities down to the 7 canonical Aura 2.0 entities:
+       `Task`, `Subtask`, `DailyPlan`, `DailyPlanItem`, `PendingOperation`, `LifeEventEntity`, `ProposedActionEntity`.
+     - Bumped to version 13 with `fallbackToDestructiveMigration()`.
+  3. **Pristine Repository (`Repository.kt`)**:
+     - Purged all legacy notes, drawings, debts, transactions, and audio operations.
+     - Purely focused on Task execution, Plan locking & adaptation, Offline Sync queueing, Canonical Life Events indexing, and Proposed Actions processing.
+  4. **Dedicated Aura Brain & AI Screen (`BrainScreen.kt`)**:
+     - Established native UI adhering strictly to Invariant 1 (*"AI Never Mutates Domain Data Directly"*).
+     - Surfaces Live Context Engine cards, pending `ProposedAction` cards with explicit user `[ APPROVE ]` and `[ REJECT ]` controls, and Canonical Life Events activity stream.
+  5. **Pure 4-Tab Personal OS Navigation (`MainAppContainer.kt`)**:
+     - Streamlined root navigation into 4 intentional tabs:
+       1. **Today**: Kickoff, Plan Status, Hero Current Focus with wall-clock drift-free focus timer, commitments backlog.
+       2. **Plan**: 4-step Plan Tomorrow workflow, day locking, upcoming kanban.
+       3. **Brain**: Real-time context engine, AI proposed actions, life event bus.
+       4. **Settings**: Theme modes (Dark, AMOLED, Light), color palettes, offline sync inspector, founder diagnostics.
+- **Consequences:**
+  - Zero legacy code remains in the Android codebase.
+  - The Android app binary is lean, clean, and perfectly aligned with the Fastify modular monolith backend.
+  - Both backend and Android unit tests pass 100% (0 errors).
+
+

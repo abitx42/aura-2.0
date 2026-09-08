@@ -64,7 +64,9 @@
 | **Real Offline E2E Reliability & SDK (ADR-014)**  | ✅ Complete | 5 offline scenarios verified in backend + Android tests; real SDK toolchain configured; debug APK built. |
 | **Today Screen (Screen 11)**      | ✅ Complete | Plan Status Banner + Evening Review Card + Current Focus hero card with focus timer. |
 | **Planning Screen (Screen 12-16)**| ✅ Complete | Tabs (`Today`, `Tomorrow`, `Upcoming`) + 4-step Plan Tomorrow workflow + Lock Tomorrow 🔒. |
-| **Automated Verification Suites** | ✅ Complete | Multi-suite integration tests for auth, plans, sync, and actions in `backend/test/`. |
+| **Aura Brain Screen (Screen 17)** | ✅ Complete | Real-time Context Engine card, Proposed Actions queue with [APPROVE]/[REJECT], Life Events stream. |
+| **Pure Aura 2.0 Slate (ADR-017)** | ✅ Complete | 100% legacy Aura Notes code eliminated (-18,353 lines). Pure Personal OS architecture. |
+| **Automated Verification Suites** | ✅ Complete | Multi-suite integration tests for auth, plans, sync, and actions in `backend/test/` & Android unit tests. |
 
 ---
 
@@ -73,11 +75,15 @@
 - **Android App**: `android/`
   - API & Session: `com.aura.personalos.api.AuraApiService`, `com.aura.personalos.api.AuraApiClient`, `com.aura.personalos.auth.AuraSessionManager`
   - Sync Layer: `com.aura.personalos.sync.AuraSyncManager`, `com.aura.personalos.sync.SyncWorker`
-  - Database & Entities: `com.aura.personalos.data.*` (`AppDatabase`, `Task`, `DailyPlan`, `DailyPlanItem`, `PendingOperation`, `AppRepository`)
-  - Deterministic ViewModel: `com.aura.personalos.ui.AppViewModel` (Current Focus engine, Focus timer, Plan locking)
+  - Database & Entities: `com.aura.personalos.data.*` (`AppDatabase`, `Task`, `Subtask`, `DailyPlan`, `DailyPlanItem`, `PendingOperation`, `LifeEventEntity`, `ProposedActionEntity`, `AppRepository`)
+  - Deterministic ViewModel: `com.aura.personalos.ui.AppViewModel` (Current Focus engine, Focus timer, Plan locking, Brain state)
+  - Modular Navigation: `com.aura.personalos.ui.MainAppContainer` (4-tab bottom bar: Today, Plan, Brain, Settings)
   - Screens:
-    - Screen 11 (Today): `MainAppContainer.kt` (Dynamic greeting, Plan Status Banner, Current Focus Card, Progress Ring)
-    - Screen 12-16 (Planning): `TasksComponents.kt` (`PlanTomorrowScreen`, `UpcomingPlanScreen`, `LockTomorrowDialog`, Kanban & List)
+    - Screen 11 (Today): `TodayScreen.kt` (Dynamic greeting, Plan Status Banner, Current Focus Card, Backlog)
+    - Screen 12-16 (Plan): `TasksComponents.kt` (`PlanTomorrowScreen`, `UpcomingPlanScreen`, `LockTomorrowDialog`, Kanban & List)
+    - Screen 17 (Brain): `BrainScreen.kt` (Real-time Context Engine, Proposed Actions Queue, Canonical Life Events stream)
+    - Settings: `SettingsScreen.kt` (Theme Mode, Palettes, Sync Inspector, Founder Diagnostics)
+    - Execution & Review: `FocusExecutionModal`, `NightReviewDialog.kt`
     - Onboarding: `OnboardingScreen.kt` (Synchronized with `AuraSessionManager`)
 - **Backend Service**: `backend/`
   - Entry point: `src/server.ts`
