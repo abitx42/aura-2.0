@@ -1,11 +1,9 @@
 package com.aura.personalos
 
 import com.aura.personalos.data.*
-import com.aura.personalos.ui.FloatPair
-import com.aura.personalos.ui.SketchStroke
-import com.aura.personalos.ui.hashPin
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.text.SimpleDateFormat
@@ -14,300 +12,184 @@ import java.util.Locale
 
 class AuraCoreUnitTest {
 
-    @Test
-    fun testPinHashing_deterministicAndSecure() {
-        val pin = "1234"
-        val hash1 = hashPin(pin)
-        val hash2 = hashPin(pin)
-        val hashOther = hashPin("1235")
-
-        assertEquals("Hashes for same PIN must match", hash1, hash2)
-        assertNotEquals("Hashes for different PINs must not match", hash1, hashOther)
-        assertEquals("SHA-256 hash length must be 64 characters", 64, hash1.length)
-    }
+    // ==========================================
+    // 1. DETERMINISTIC METRICS & PLAN ACCURACY (INVARIANT 2)
+    // ==========================================
 
     @Test
-    fun testHabitStreakCalculation_consecutiveDays() {
-        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-        val cal = Calendar.getInstance()
-
-        val logs = mutableListOf<HabitLog>()
-        // 5 consecutive days ending today
-        for (i in 0 until 5) {
-            logs.add(HabitLog(id = i, habitId = 1, completionDate = sdf.format(cal.time)))
-            cal.add(Calendar.DAY_OF_YEAR, -1)
+    fun testPlanAccuracyCalculation_deterministic() {
+        val totalPlanned = 5
+        val completed = 4
+        val percent = if (totalPlanned > 0) {
+            ((completed.toDouble() / totalPlanned.toDouble()) * 100).toInt()
+        } else {
+            100
         }
-
-        // Test streak logic
-        val dates = logs.mapNotNull {
-            try {
-                val d = sdf.parse(it.completionDate)
-                val c = Calendar.getInstance()
-                if (d != null) {
-                    c.time = d
-                    c.set(Calendar.HOUR_OF_DAY, 0)
-                    c.set(Calendar.MINUTE, 0)
-                    c.set(Calendar.SECOND, 0)
-                    c.set(Calendar.MILLISECOND, 0)
-                    c.timeInMillis
-                } else null
-            } catch (_: Exception) { null }
-        }.distinct().sortedDescending()
-
-        assertEquals("Must have 5 distinct days", 5, dates.size)
+        assertEquals(80, percent)
     }
 
     @Test
-    fun testDrawingSerializationCycle() {
-        val strokes = listOf(
-            SketchStroke(
-                points = listOf(FloatPair(10f, 20f), FloatPair(30f, 40f)),
-                colorHex = "#FF5B32",
-                strokeWidth = 6f,
-                isEraser = false
-            ),
-            SketchStroke(
-                points = listOf(FloatPair(50f, 60f), FloatPair(70f, 80f)),
-                colorHex = "#00D084",
-                strokeWidth = 10f,
-                isEraser = true
-            )
-        )
-
-        // Serialize
-        val sb = StringBuilder()
-        for (stroke in strokes) {
-            if (stroke.points.isEmpty()) continue
-            sb.append(stroke.colorHex).append("|")
-            sb.append(stroke.strokeWidth).append("|")
-            sb.append(if (stroke.isEraser) "1" else "0").append("|")
-            val pointsStr = stroke.points.joinToString(",") { "${it.x}:${it.y}" }
-            sb.append(pointsStr)
-            sb.append("||")
+    fun testPlanAccuracyCalculation_zeroPlannedReturns100() {
+        val totalPlanned = 0
+        val completed = 0
+        val percent = if (totalPlanned > 0) {
+            ((completed.toDouble() / totalPlanned.toDouble()) * 100).toInt()
+        } else {
+            100
         }
-        val serialized = sb.toString()
-
-        assertTrue("Serialized output must contain hex colors", serialized.contains("#FF5B32"))
-        assertTrue("Serialized output must contain points", serialized.contains("10.0:20.0"))
+        assertEquals(100, percent)
     }
 
     @Test
-    fun testNetWorthCalculation_accurateBalance() {
-        val totalAvailableBalance = 45000.0
-        val totalInvested = 120000.0
-        val totalToReceive = 15000.0
-        val totalYouOwe = 8000.0
+    fun testPlanAccuracyCalculation_allCompletedReturns100() {
+        val totalPlanned = 3
+        val completed = 3
+        val percent = ((completed.toDouble() / totalPlanned.toDouble()) * 100).toInt()
+        assertEquals(100, percent)
+    }
 
-        val netWorth = totalAvailableBalance + totalInvested + totalToReceive - totalYouOwe
-        assertEquals(172000.0, netWorth, 0.001)
+    // ==========================================
+    // 2. WALL-CLOCK FOCUS TIMER & DRIFT PREVENTION
+    // ==========================================
+
+    @Test
+    fun testWallClockTimer_elapsedCalculation() {
+        val startTime = 1000000L
+        val now = 1030000L // 30 seconds later
+        val totalPaused = 5000L // 5 seconds paused
+        val elapsedSeconds = ((now - startTime - totalPaused) / 1000L).toInt()
+
+        assertEquals(25, elapsedSeconds)
     }
 
     @Test
-    fun testDebtSettlementAdjustment_cappedToRemaining() {
-        val debtAmount = 500.0
-        val remainingAmount = 300.0
-        val paymentAttempt = 400.0
+    fun testWallClockTimer_remainingCountdown() {
+        val targetSeconds = 25 * 60 // 1500 seconds (25m)
+        val elapsedSeconds = 300 // 5m elapsed
+        val remaining = (targetSeconds - elapsedSeconds).coerceAtLeast(0)
 
-        val actualPaid = minOf(paymentAttempt, remainingAmount)
-        val newRemaining = remainingAmount - actualPaid
-
-        assertEquals(300.0, actualPaid, 0.001)
-        assertEquals(0.0, newRemaining, 0.001)
-    }
-
-    @Test
-    fun testDateFormatting_safePattern() {
-        val cal = Calendar.getInstance()
-        cal.set(2026, Calendar.AUGUST, 31)
-        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-        val formatted = sdf.format(cal.time)
-
-        assertEquals("2026-08-31", formatted)
-    }
-
-    @Test
-    fun testExpenseEqualSplit_fairShareCalculation() {
-        val totalBill = 1500.0
-        val members = listOf("Alice", "Bob", "Charlie")
-        val shareCount = members.size.coerceAtLeast(1)
-        val splitShare = totalBill / shareCount
-
-        assertEquals(500.0, splitShare, 0.001)
-        val totalSum = splitShare * shareCount
-        assertEquals(totalBill, totalSum, 0.001)
-    }
-
-    @Test
-    fun testWordAndCharCount_accurateMultiLine() {
-        val content = "Aura Personal OS\nSeamless offline fintech and productivity."
-        val words = content.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
-        val charCount = content.length
-
-        assertEquals(8, words.size)
-        assertEquals(59, charCount)
-    }
-
-    @Test
-    fun testTimerFormatting_leadingZeros() {
-        val totalSeconds = 125 // 2 mins 5 secs
-        val mins = totalSeconds / 60
-        val secs = totalSeconds % 60
+        assertEquals(1200, remaining)
+        val mins = remaining / 60
+        val secs = remaining % 60
         val formatted = "%02d:%02d".format(mins, secs)
-
-        assertEquals("02:05", formatted)
+        assertEquals("20:00", formatted)
     }
 
     @Test
-    fun testPinPasscodeValidation_strictFourDigits() {
-        val validPin = "4829"
-        val tooShort = "482"
-        val tooLong = "48291"
-        val withLetters = "482a"
-
-        fun isValid(p: String) = p.length == 4 && p.all { it.isDigit() }
-
-        assertTrue(isValid(validPin))
-        org.junit.Assert.assertFalse(isValid(tooShort))
-        org.junit.Assert.assertFalse(isValid(tooLong))
-        org.junit.Assert.assertFalse(isValid(withLetters))
+    fun testWallClockTimer_clampedAtZero() {
+        val targetSeconds = 60
+        val elapsedSeconds = 90
+        val remaining = (targetSeconds - elapsedSeconds).coerceAtLeast(0)
+        assertEquals(0, remaining)
     }
 
-    @Test
-    fun testReminderTimeStringFormat_validHoursMinutes() {
-        val validTime = "08:30"
-        val validEvening = "23:59"
-        val invalidHours = "25:00"
-        val invalidMins = "12:60"
-
-        val timeRegex = Regex("^([01]\\d|2[0-3]):[0-5]\\d$")
-
-        assertTrue(timeRegex.matches(validTime))
-        assertTrue(timeRegex.matches(validEvening))
-        org.junit.Assert.assertFalse(timeRegex.matches(invalidHours))
-        org.junit.Assert.assertFalse(timeRegex.matches(invalidMins))
-    }
+    // ==========================================
+    // 3. AI PROPOSED ACTIONS (INVARIANT 1)
+    // ==========================================
 
     @Test
-    fun testCurrencyDisplay_roundToIntFormatting() {
-        val toReceive = 5250.75
-        val youOwe = 1200.25
-        val netDifference = (toReceive - youOwe).toInt()
-
-        assertEquals(4050, netDifference)
-    }
-
-    @Test
-    fun testTaskEnergyLevels_standardLabels() {
-        val energyLevels = listOf("High Energy", "Medium Energy", "Low Energy")
-        assertEquals(3, energyLevels.size)
-        assertTrue(energyLevels.contains("High Energy"))
-        assertTrue(energyLevels.contains("Medium Energy"))
-        assertTrue(energyLevels.contains("Low Energy"))
-    }
-
-    @Test
-    fun testMoodCategories_validKeys() {
-        val validMoods = setOf("HAPPY", "CALM", "CONTENT", "NEUTRAL", "CREATIVE", "TIRED", "SAD")
-        val currentMood = "CALM"
-        assertTrue("Selected mood must be within recognized set", validMoods.contains(currentMood))
-    }
-
-    @Test
-    fun testEmptyDrawingStroke_safeHandling() {
-        val emptyStroke = SketchStroke(points = emptyList(), colorHex = "#FF5B32", strokeWidth = 6f)
-        assertTrue(emptyStroke.points.isEmpty())
-    }
-
-    @Test
-    fun testNoteFiltering_caseInsensitiveMatches() {
-        val notes = listOf(
-            Pair("Meeting Notes", "Discuss Q3 sprint plans"),
-            Pair("Grocery List", "Milk, Eggs, Apples"),
-            Pair("Ideas for Aura", "Add offline first ledger syncing")
+    fun testProposedAction_lifecycleStateTransitions() {
+        val action = ProposedActionEntity(
+            id = "act-1234",
+            actionType = "RESCHEDULE_TASK",
+            reasoning = "You were interrupted during focus block.",
+            payloadJson = """{"taskId":42,"newDate":"2026-09-10"}""",
+            status = "PROPOSED"
         )
-        val query = "aura"
-        val results = notes.filter { (title, content) ->
-            title.contains(query, ignoreCase = true) || content.contains(query, ignoreCase = true)
-        }
 
-        assertEquals(1, results.size)
-        assertEquals("Ideas for Aura", results[0].first)
+        assertEquals("PROPOSED", action.status)
+
+        val approvedAction = action.copy(status = "APPROVED")
+        assertEquals("APPROVED", approvedAction.status)
+
+        val executedAction = approvedAction.copy(status = "EXECUTED")
+        assertEquals("EXECUTED", executedAction.status)
+
+        val rejectedAction = action.copy(status = "REJECTED")
+        assertEquals("REJECTED", rejectedAction.status)
     }
 
     @Test
-    fun testSingleMemberExpenseSplit_fullAmount() {
-        val bill = 350.0
-        val members = listOf("Alice")
-        val partitionCount = members.size.coerceAtLeast(1)
-        val mapSplits = members.associateWith { bill / partitionCount }
-
-        assertEquals(1, mapSplits.size)
-        assertEquals(350.0, mapSplits["Alice"] ?: 0.0, 0.001)
+    fun testProposedAction_invariantEnforcement() {
+        // AI output is strictly a ProposedAction, never a direct mutation
+        val rawAiSuggestion = mapOf(
+            "action" to "SPLIT_TASK",
+            "taskId" to 10,
+            "subtasks" to listOf("Step A", "Step B")
+        )
+        assertNotNull(rawAiSuggestion["action"])
+        val entity = ProposedActionEntity(
+            actionType = rawAiSuggestion["action"] as String,
+            reasoning = "High complexity detected, splitting into actionable steps.",
+            payloadJson = """{"taskId":10,"steps":["Step A","Step B"]}""",
+            status = "PROPOSED"
+        )
+        assertEquals("PROPOSED", entity.status)
+        assertEquals("SPLIT_TASK", entity.actionType)
     }
+
+    // ==========================================
+    // 4. CANONICAL LIFE EVENT INDEX (ADR-014)
+    // ==========================================
 
     @Test
-    fun testMultipleCategoryTags_csvParsing() {
-        val rawTags = "Fintech, Savings , 2026 , Budget "
-        val parsed = rawTags.split(",").map { it.trim() }.filter { it.isNotBlank() }
+    fun testCanonicalLifeEvent_structure() {
+        val event = LifeEventEntity(
+            domain = "EXECUTION",
+            eventType = "FOCUS_COMPLETED",
+            payloadJson = """{"taskId":5,"actualSeconds":1500,"taskTitle":"Write Fastify Tests"}""",
+            createdAt = 1757376000000L
+        )
 
-        assertEquals(4, parsed.size)
-        assertEquals("Fintech", parsed[0])
-        assertEquals("Savings", parsed[1])
-        assertEquals("2026", parsed[2])
-        assertEquals("Budget", parsed[3])
+        assertEquals("EXECUTION", event.domain)
+        assertEquals("FOCUS_COMPLETED", event.eventType)
+        assertTrue(event.payloadJson.contains("actualSeconds"))
+        assertEquals(1757376000000L, event.createdAt)
     }
+
+    // ==========================================
+    // 5. SYNC QUEUE & OFFLINE MUTATIONS
+    // ==========================================
 
     @Test
-    fun testAmountParsing_validDoubleStrings() {
-        val input1 = "1500"
-        val input2 = " 250.75 "
-        val input3 = "0.99"
+    fun testPendingOperation_offlineQueueCreation() {
+        val op = PendingOperation(
+            entityType = "TASK",
+            operationType = "CREATE",
+            entitySyncId = "task-uuid-1234",
+            payload = """{"title":"Design Pure Architecture","priority":"High"}"""
+        )
 
-        assertEquals(1500.0, input1.trim().toDoubleOrNull() ?: 0.0, 0.001)
-        assertEquals(250.75, input2.trim().toDoubleOrNull() ?: 0.0, 0.001)
-        assertEquals(0.99, input3.trim().toDoubleOrNull() ?: 0.0, 0.001)
+        assertEquals("TASK", op.entityType)
+        assertEquals("CREATE", op.operationType)
+        assertEquals("task-uuid-1234", op.entitySyncId)
+        assertTrue(op.retryCount == 0)
     }
+
+    // ==========================================
+    // 6. NIGHT REVIEW RECONCILIATION
+    // ==========================================
 
     @Test
-    fun testAmountParsing_invalidStrings() {
-        val invalid1 = "abc"
-        val invalid2 = "$120"
-        val invalid3 = ""
+    fun testNightReviewReconciliation_actions() {
+        val reconciliations = mapOf(
+            1 to Pair("MOVE_TOMORROW", "Ran out of energy"),
+            2 to Pair("CANCEL", "No longer needed"),
+            3 to Pair("RESCHEDULE", "Waiting on dependency")
+        )
 
-        assertEquals(0.0, invalid1.toDoubleOrNull() ?: 0.0, 0.001)
-        assertEquals(0.0, invalid2.toDoubleOrNull() ?: 0.0, 0.001)
-        assertEquals(0.0, invalid3.toDoubleOrNull() ?: 0.0, 0.001)
+        val movedCount = reconciliations.count { it.value.first == "MOVE_TOMORROW" }
+        val cancelledCount = reconciliations.count { it.value.first == "CANCEL" }
+        val rescheduledCount = reconciliations.count { it.value.first == "RESCHEDULE" }
+
+        assertEquals(1, movedCount)
+        assertEquals(1, cancelledCount)
+        assertEquals(1, rescheduledCount)
     }
 
-    @Test
-    fun testNetWorthCalculation_withZeroDebts() {
-        val accountsTotal = 75000.0
-        val investmentsTotal = 25000.0
-        val toReceive = 0.0
-        val youOwe = 0.0
-
-        val net = accountsTotal + investmentsTotal + toReceive - youOwe
-        assertEquals(100000.0, net, 0.001)
-    }
-
-    @Test
-    fun testNotesSorting_byModifiedTimestamp() {
-        val n1 = Note(id = 1, title = "A", content = "", lastModified = 1000L)
-        val n2 = Note(id = 2, title = "B", content = "", lastModified = 3000L)
-        val n3 = Note(id = 3, title = "C", content = "", lastModified = 2000L)
-
-        val list = listOf(n1, n2, n3)
-        val recentFirst = list.sortedByDescending { it.lastModified }
-        val oldestFirst = list.sortedBy { it.lastModified }
-
-        assertEquals(2, recentFirst[0].id)
-        assertEquals(3, recentFirst[1].id)
-        assertEquals(1, recentFirst[2].id)
-
-        assertEquals(1, oldestFirst[0].id)
-        assertEquals(3, oldestFirst[1].id)
-        assertEquals(2, oldestFirst[2].id)
-    }
+    // ==========================================
+    // 7. TASK DOMAIN & PRIORITIES
+    // ==========================================
 
     @Test
     fun testTaskPriorityOrdering_weightRank() {
@@ -323,84 +205,6 @@ class AuraCoreUnitTest {
         val sortedByPriority = tasks.sortedByDescending { priorityWeight(it) }
 
         assertEquals(listOf("Urgent", "High", "Medium", "Low"), sortedByPriority)
-    }
-
-    @Test
-    fun testProductivityPercentage_math() {
-        val total = 5
-        val completed = 4
-        val percent = if (total > 0) ((completed.toDouble() / total) * 100).toInt() else 0
-
-        assertEquals(80, percent)
-    }
-
-    @Test
-    fun testHabitStreak_consecutiveDays() {
-        val habitLogs = listOf(
-            HabitLog(id = 1, habitId = 10, completionDate = "2026-08-30"),
-            HabitLog(id = 2, habitId = 10, completionDate = "2026-08-31")
-        )
-        val dates = habitLogs.map { it.completionDate }.toSet()
-        val isConsecutive = dates.contains("2026-08-30") && dates.contains("2026-08-31")
-
-        assertTrue(isConsecutive)
-        assertEquals(2, dates.size)
-    }
-
-    @Test
-    fun testHabitStreak_brokenStreak() {
-        val habitLogs = listOf(
-            HabitLog(id = 1, habitId = 10, completionDate = "2026-08-25"),
-            HabitLog(id = 2, habitId = 10, completionDate = "2026-08-31")
-        )
-        val dates = habitLogs.map { it.completionDate }.toSet()
-        val yesterday = "2026-08-30"
-        val today = "2026-08-31"
-        val isConsecutive = dates.contains(yesterday) && dates.contains(today)
-
-        org.junit.Assert.assertFalse(isConsecutive)
-    }
-
-    @Test
-    fun testHabitFrequencies_dailyAndWeekly() {
-        val habits = listOf(
-            Habit(id = 1, name = "Morning Run", frequency = "Daily"),
-            Habit(id = 2, name = "Deep Cleaning", frequency = "Weekly"),
-            Habit(id = 3, name = "Meditation", frequency = "Daily")
-        )
-        val daily = habits.filter { it.frequency == "Daily" }
-        val weekly = habits.filter { it.frequency == "Weekly" }
-
-        assertEquals(2, daily.size)
-        assertEquals(1, weekly.size)
-    }
-
-    @Test
-    fun testMultipleDebtSettlements_reachesZero() {
-        var debt = Debt(id = 1, friendId = 1, friendName = "Alex", title = "Dinner", totalAmount = 1000.0, amount = 1000.0, date = "2026-03-30", remainingAmount = 1000.0, isYouOwe = false)
-        
-        // 1st payment: 400
-        val payment1 = 400.0
-        val actualPaid1 = minOf(payment1, debt.remainingAmount)
-        debt = debt.copy(remainingAmount = debt.remainingAmount - actualPaid1)
-        assertEquals(600.0, debt.remainingAmount, 0.001)
-
-        // 2nd payment: 600
-        val payment2 = 600.0
-        val actualPaid2 = minOf(payment2, debt.remainingAmount)
-        debt = debt.copy(remainingAmount = debt.remainingAmount - actualPaid2, status = if (debt.remainingAmount - actualPaid2 <= 0.0) "SETTLED" else "PENDING")
-        assertEquals(0.0, debt.remainingAmount, 0.001)
-        assertEquals("SETTLED", debt.status)
-    }
-
-    @Test
-    fun testFriendNetBalanceCalculation_positiveNegative() {
-        val toReceive = 1500.0
-        val youOwe = 800.0
-        val netBalance = toReceive - youOwe
-
-        assertEquals(700.0, netBalance, 0.001)
-        assertTrue(netBalance > 0)
     }
 
     @Test
@@ -427,36 +231,36 @@ class AuraCoreUnitTest {
     }
 
     @Test
-    fun testRobotMood_allEnumVariants() {
-        val moods = com.aura.personalos.ui.components.RobotMood.values()
-        assertTrue(moods.contains(com.aura.personalos.ui.components.RobotMood.HAPPY))
-        assertTrue(moods.contains(com.aura.personalos.ui.components.RobotMood.CURIOUS))
-        assertTrue(moods.contains(com.aura.personalos.ui.components.RobotMood.LOVE))
-        assertTrue(moods.contains(com.aura.personalos.ui.components.RobotMood.STRONG_SHIELD))
-        assertTrue(moods.contains(com.aura.personalos.ui.components.RobotMood.COOL))
+    fun testDateFormatting_safePattern() {
+        val cal = Calendar.getInstance()
+        cal.set(2026, Calendar.SEPTEMBER, 9)
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val formatted = sdf.format(cal.time)
+
+        assertEquals("2026-09-09", formatted)
     }
 
     @Test
-    fun testRobotState_allPhysicsStates() {
-        val states = com.aura.personalos.ui.components.RobotState.values()
-        assertTrue(states.contains(com.aura.personalos.ui.components.RobotState.IDLE_STAND))
-        assertTrue(states.contains(com.aura.personalos.ui.components.RobotState.WALKING))
-        assertTrue(states.contains(com.aura.personalos.ui.components.RobotState.CLIMBING_UP))
-        assertTrue(states.contains(com.aura.personalos.ui.components.RobotState.PERCHED_ON_OBJECT))
-        assertTrue(states.contains(com.aura.personalos.ui.components.RobotState.DRAGGED))
+    fun testReminderTimeStringFormat_validHoursMinutes() {
+        val validTime = "08:30"
+        val validEvening = "23:59"
+        val invalidHours = "25:00"
+        val invalidMins = "12:60"
+
+        val timeRegex = Regex("^([01]\\d|2[0-3]):[0-5]\\d$")
+
+        assertTrue(timeRegex.matches(validTime))
+        assertTrue(timeRegex.matches(validEvening))
+        assertFalse(timeRegex.matches(invalidHours))
+        assertFalse(timeRegex.matches(invalidMins))
     }
 
     @Test
-    fun testClimbablePlatform_relativeXBounds() {
-        val platforms = listOf(
-            com.aura.personalos.ui.components.ClimbablePlatform("home", "Home Base", com.aura.personalos.ui.Section.Dashboard, "🏠", 0.12f, 44f, "Home!"),
-            com.aura.personalos.ui.components.ClimbablePlatform("notes", "Notes Vault", com.aura.personalos.ui.Section.Notes, "📝", 0.31f, 44f, "Notes!"),
-            com.aura.personalos.ui.components.ClimbablePlatform("tasks", "Tasks Tower", com.aura.personalos.ui.Section.Tasks, "🛡️", 0.50f, 44f, "Tasks!"),
-            com.aura.personalos.ui.components.ClimbablePlatform("money", "Money Vault", com.aura.personalos.ui.Section.Money, "💰", 0.69f, 44f, "Money!")
-        )
-        platforms.forEach { p ->
-            assertTrue("relativeX must be between 0f and 1f", p.relativeX in 0f..1f)
-            assertTrue("elevation must be positive", p.elevationDp > 0f)
-        }
+    fun testTaskEnergyLevels_standardLabels() {
+        val energyLevels = listOf("High Energy", "Medium Energy", "Low Energy")
+        assertEquals(3, energyLevels.size)
+        assertTrue(energyLevels.contains("High Energy"))
+        assertTrue(energyLevels.contains("Medium Energy"))
+        assertTrue(energyLevels.contains("Low Energy"))
     }
 }

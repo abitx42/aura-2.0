@@ -44,9 +44,9 @@ fun DebugScreen(
     val pendingOps by viewModel.allPendingOperations.collectAsState()
     val isSimulatedOffline by viewModel.isSimulatedOffline.collectAsState()
     val tasks by viewModel.allTasks.collectAsState()
-    val notes by viewModel.activeNotes.collectAsState()
-    val habits by viewModel.habits.collectAsState()
-    val transactions by viewModel.allTransactions.collectAsState()
+    val todayPlan by viewModel.todayPlan.collectAsState()
+    val lifeEvents by viewModel.recentLifeEvents.collectAsState()
+    val proposedActions by viewModel.pendingProposedActions.collectAsState()
     val timelineEvents by com.aura.personalos.util.AuraSessionTimeline.events.collectAsState()
 
     var frictionNoteInput by remember { mutableStateOf("") }
@@ -121,7 +121,7 @@ fun DebugScreen(
                         TelemetryRow("Device", "${Build.MANUFACTURER} ${Build.MODEL} (${Build.DEVICE})")
                         TelemetryRow("Android Version", "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
                         TelemetryRow("App Version", "2.0.0 (Debug APK)")
-                        TelemetryRow("Room Database", "Version 12 (SQLite)")
+                        TelemetryRow("Room Database", "Version 13 (Aura 2.0 Pure OS)")
                         TelemetryRow("Local Time", SimpleDateFormat("yyyy-MM-dd HH:mm:ss z", Locale.getDefault()).format(Date()))
                     }
                 }
@@ -151,9 +151,9 @@ fun DebugScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             CountPill("Tasks", tasks.size.toString())
-                            CountPill("Notes", notes.size.toString())
-                            CountPill("Habits", habits.size.toString())
-                            CountPill("Trans.", transactions.size.toString())
+                            CountPill("Plan", todayPlan?.status ?: "NONE")
+                            CountPill("Events", lifeEvents.size.toString())
+                            CountPill("Brain", proposedActions.size.toString())
                             CountPill("Pending", pendingOps.size.toString())
                         }
                     }
@@ -189,7 +189,7 @@ fun DebugScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Button(
-                                onClick = { viewModel.startNightReview() },
+                                onClick = { viewModel.openNightReview() },
                                 colors = ButtonDefaults.buttonColors(containerColor = AuraTheme.colors.accentBrand),
                                 shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier.weight(1f)

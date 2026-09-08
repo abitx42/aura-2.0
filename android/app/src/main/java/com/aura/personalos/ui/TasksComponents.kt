@@ -91,8 +91,8 @@ fun TasksScreen(
                 }
 
                 AuraHeaderActions(
-                    onProClick = { viewModel.navigateTo(Section.SecuritySettings) },
-                    onProfileClick = { viewModel.navigateTo(Section.SecuritySettings) }
+                    onProClick = { viewModel.navigateTo(Section.Settings) },
+                    onProfileClick = { viewModel.navigateTo(Section.Settings) }
                 )
             }
 

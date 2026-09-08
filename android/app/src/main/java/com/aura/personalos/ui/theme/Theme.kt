@@ -54,6 +54,21 @@ val LocalAuraColors = staticCompositionLocalOf {
     )
 }
 
+enum class ThemeMode {
+    DARK,
+    AMOLED,
+    LIGHT
+}
+
+enum class ThemePalette {
+    CYAN_GLOW,
+    EMERALD_GARDEN,
+    RADIANT_SUNSET,
+    AXIO_LIME,
+    ROYAL_AMETHYST,
+    OCEAN_BREEZE
+}
+
 object AuraTheme {
     val colors: AuraCustomColors
         @Composable
@@ -62,47 +77,47 @@ object AuraTheme {
 
 @Composable
 fun MyApplicationTheme(
-    themeMode: String = "DARK",
-    themePalette: String = "RADIANT_SUNSET", // Default to Radiant Coral Sunset from reference
+    themeMode: ThemeMode = ThemeMode.DARK,
+    themePalette: ThemePalette = ThemePalette.CYAN_GLOW,
     content: @Composable () -> Unit
 ) {
-    val isDark = themeMode != "LIGHT"
+    val isDark = themeMode != ThemeMode.LIGHT
 
     // Backgrounds & Surface scale
     val (bg, surface, card, cardBorder, activePill) = when (themeMode) {
-        "AMOLED" -> Quintuple(AmoledBackground, AmoledSurface, AmoledCard, AmoledCardBorder, AmoledPillActive)
-        "LIGHT" -> Quintuple(LightBackground, LightSurface, LightCard, LightCardBorder, LightPillActive)
+        ThemeMode.AMOLED -> Quintuple(AmoledBackground, AmoledSurface, AmoledCard, AmoledCardBorder, AmoledPillActive)
+        ThemeMode.LIGHT -> Quintuple(LightBackground, LightSurface, LightCard, LightCardBorder, LightPillActive)
         else -> Quintuple(DarkBackground, DarkSurface, DarkCard, DarkCardBorder, DarkPillActive)
     }
 
     // Palettes
     val (primary, secondary, tertiary) = when (themePalette) {
-        "AXIO_LIME" -> Triple(
+        ThemePalette.AXIO_LIME -> Triple(
             AxioElectricLime,
             SemanticGreen,
             SemanticGold
         )
-        "CYAN_GLOW" -> Triple(
+        ThemePalette.CYAN_GLOW -> Triple(
             Color(0xFF00E5FF), // Digital neon cyan
             Color(0xFF7C4DFF), // Tech purple
             Color(0xFFFFA726)  // Copper warm
         )
-        "EMERALD_GARDEN" -> Triple(
+        ThemePalette.EMERALD_GARDEN -> Triple(
             SemanticGreen,     // Mint Emerald
             Color(0xFF00B0FF), // Ocean Indigo
             SemanticGold       // Golden Plum
         )
-        "ROYAL_AMETHYST" -> Triple(
+        ThemePalette.ROYAL_AMETHYST -> Triple(
             Color(0xFFBB86FC), // Orchid Purple
             Color(0xFF7C4DFF), // Tech Purple
             Color(0xFF03DAC6)  // Cool Cyan
         )
-        "OCEAN_BREEZE" -> Triple(
+        ThemePalette.OCEAN_BREEZE -> Triple(
             Color(0xFF0288D1), // Sky Blue
             Color(0xFF00E676), // Deep Green
             Color(0xFFFFD54F)  // Sand Yellow
         )
-        else -> Triple( // "RADIANT_SUNSET" - Default Signature Fintech Coral Orange
+        ThemePalette.RADIANT_SUNSET -> Triple(
             RadiantOrange,
             Color(0xFFFF5252),
             SemanticGold

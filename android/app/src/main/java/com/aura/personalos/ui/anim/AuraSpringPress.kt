@@ -22,7 +22,7 @@ import com.aura.personalos.ui.AuraHaptics
 @OptIn(ExperimentalFoundationApi::class)
 fun Modifier.auraSpringPress(
     cornerRadius: Dp = 16.dp,
-    onClick: () -> Unit,
+    onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null
 ): Modifier = composed {
     val interactionSource = remember { MutableInteractionSource() }
@@ -51,12 +51,13 @@ fun Modifier.auraSpringPress(
         }
     }
 
-    this
-        .graphicsLayer {
-            scaleX = scale
-            scaleY = scale
-        }
-        .combinedClickable(
+    val base = this.graphicsLayer {
+        scaleX = scale
+        scaleY = scale
+    }
+
+    if (onClick != null) {
+        base.combinedClickable(
             interactionSource = interactionSource,
             indication = null,
             onClick = {
@@ -65,4 +66,7 @@ fun Modifier.auraSpringPress(
             },
             onLongClick = onLongClick
         )
+    } else {
+        base
+    }
 }
